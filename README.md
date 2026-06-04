@@ -56,10 +56,25 @@ pytest                   # 검증기 테스트
 
 ## Slack 앱 준비
 
-1. Slash Command `/fw-request` → Request URL `https://<host>/slack/events`
-2. Interactivity → 동일 URL
+1. Slash Command `/fw-request`
+2. Interactivity 활성화 (버튼 동작에 필요)
 3. Bot Scopes: `commands`, `chat:write`
-4. 봇 실행: `uvicorn slack_bot.app:api --port 3000`
+4. 실행 방식 선택:
+
+**A. Socket Mode (권장, 사내망)** — 인바운드 포트 불필요
+- Basic Information → App-Level Tokens 에서 `connections:write` 스코프 토큰 생성 → `SLACK_APP_TOKEN`
+- Socket Mode 토글 ON
+- 실행: `python -m slack_bot.app`
+
+**B. HTTP Mode** — 공개 HTTPS 필요
+- Slash Command / Interactivity Request URL → `https://<host>/slack/events`
+- 실행: `uvicorn slack_bot.app:api --port 3000`
+
+### 모바일 승인 플로우
+`/fw-request` 제출 → 봇이 **PR 생성 + 승인/거부 버튼 메시지** 게시 →
+**요청자가 아닌 다른 사람**이 폰에서 `Approve & merge` 탭 → PR 머지(→ CI apply),
+`Reject` 탭 → PR close. 요청자 본인이 승인하면 차단됩니다(ephemeral 경고).
+> 버튼 승인이 PR을 머지하므로, `production` environment 승인까지 두면 2단계 게이트가 됩니다.
 
 ## GitHub 준비
 
@@ -71,6 +86,8 @@ pytest                   # 검증기 테스트
 
 - **요청자 ≠ 승인자**: PR 리뷰 + production environment 승인
 - **가드레일**: `any-any` 금지, 금지 포트, 허용 인터페이스, 필수 로깅/스케줄
+- **참조 정합성**: 정책이 참조하는 주소/서비스가 정의돼 있지 않으면 거부(장비 적용 실패 예방), 내장 서비스는 `allowed_builtin_services` 화이트리스트로 허용
+- **중복 방지**: 주소/서비스/정책 이름 중복 검출(이름이 매칭 키라 덮어쓰기 사고 예방)
 - **트립와이어**: `max_changes_per_apply` 초과 시 apply 거부
 - **관리 태그**: 엔진은 `managed-by:fwgitops` 객체만 생성/수정, 수동 객체는 보존
 - **삭제 안 함**: YAML에서 빠진 객체를 자동 삭제하지 않음(사고 방지)

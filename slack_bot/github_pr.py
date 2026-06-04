@@ -37,10 +37,10 @@ def _slug(text: str) -> str:
     return "".join(keep).strip("-")[:40] or "request"
 
 
-def open_policy_pr(policy: dict, requester: str, justification: str) -> str:
+def open_policy_pr(policy: dict, requester: str, justification: str) -> dict:
     """Append `policy` to firewall_policies.yaml on a new branch and open a PR.
 
-    Returns the PR HTML URL.
+    Returns {"url": <html_url>, "number": <pr_number>}.
     """
     cfg = GitHubConfig()
     branch = f"fw-request/{_slug(policy['name'])}-{int(time.time())}"
@@ -60,6 +60,32 @@ def open_policy_pr(policy: dict, requester: str, justification: str) -> str:
             message=f"fw-request: {policy['name']} (by {requester})",
         )
         return _create_pr(client, cfg, branch, policy, requester, justification)
+
+
+def merge_pr(number: int, approver: str) -> str:
+    """Merge an approved PR (which triggers the apply workflow). Returns sha."""
+    cfg = GitHubConfig()
+    with httpx.Client(headers=cfg.headers, timeout=30) as client:
+        r = client.put(
+            f"{API}/repos/{cfg.repo}/pulls/{number}/merge",
+            json={
+                "merge_method": "squash",
+                "commit_message": f"Approved by {approver} via Slack.",
+            },
+        )
+        r.raise_for_status()
+        return r.json().get("sha", "")
+
+
+def close_pr(number: int) -> None:
+    """Close a rejected PR without merging."""
+    cfg = GitHubConfig()
+    with httpx.Client(headers=cfg.headers, timeout=30) as client:
+        r = client.patch(
+            f"{API}/repos/{cfg.repo}/pulls/{number}",
+            json={"state": "closed"},
+        )
+        r.raise_for_status()
 
 
 def _branch_sha(client: httpx.Client, cfg: GitHubConfig, branch: str) -> str:
@@ -126,7 +152,7 @@ def _create_pr(
     policy: dict,
     requester: str,
     justification: str,
-) -> str:
+) -> dict:
     body = (
         f"**Requester:** {requester}\n"
         f"**Justification:** {justification}\n\n"
@@ -144,4 +170,5 @@ def _create_pr(
         },
     )
     r.raise_for_status()
-    return r.json()["html_url"]
+    data = r.json()
+    return {"url": data["html_url"], "number": data["number"]}

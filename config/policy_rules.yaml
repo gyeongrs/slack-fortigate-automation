@@ -25,6 +25,28 @@ allowed_interfaces:
   - wan1
   - dmz
 
+# Built-in FortiGate services that may be referenced in a policy without
+# being defined in services.yaml. Anything else must be a custom service
+# defined in services.yaml (referential-integrity check), otherwise the
+# apply would fail on the device.
+allowed_builtin_services:
+  - ALL_ICMP
+  - PING
+  - DNS
+  - HTTP
+  - HTTPS
+  - SSH
+  - NTP
+  - SMTP
+  - SMTPS
+  - IMAP
+  - IMAPS
+  - POP3
+  - POP3S
+  - LDAP
+  - SYSLOG
+  - SNMP
+
 # Every automated policy must set these.
 require:
   logtraffic: all

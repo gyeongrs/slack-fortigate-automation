@@ -51,7 +51,55 @@ def validate(state: DesiredState, rules: dict) -> list[str]:
             pol, custom_service_ports, forbidden_ports, errors
         )
 
+    errors.extend(_check_references(state, rules))
+    errors.extend(_check_duplicates(state))
     return errors
+
+
+def _check_references(state: DesiredState, rules: dict) -> list[str]:
+    """Every address/service a policy references must be resolvable, so the
+    apply does not fail on the device with a dangling reference."""
+    errs: list[str] = []
+    defined_addresses = {a.name for a in state.addresses}
+    defined_services = {s.name for s in state.services}
+    builtin_services = set(rules.get("allowed_builtin_services", []))
+
+    for pol in state.policies:
+        for field in ("srcaddr", "dstaddr"):
+            for name in getattr(pol, field):
+                if name.strip().lower() in _ANY_TOKENS:
+                    continue  # handled by forbid_any
+                if name not in defined_addresses:
+                    errs.append(
+                        f"policy '{pol.name}': {field} '{name}' is not defined "
+                        f"in addresses.yaml."
+                    )
+        for name in pol.service:
+            if name.strip().lower() in _ANY_TOKENS:
+                continue
+            if name not in defined_services and name not in builtin_services:
+                errs.append(
+                    f"policy '{pol.name}': service '{name}' is neither a custom "
+                    f"service (services.yaml) nor an allowed built-in service."
+                )
+    return errs
+
+
+def _check_duplicates(state: DesiredState) -> list[str]:
+    """Names are the match key for the engine, so duplicates would cause one
+    object to silently overwrite another."""
+    errs: list[str] = []
+    for kind, items in (
+        ("address", state.addresses),
+        ("service", state.services),
+        ("policy", state.policies),
+    ):
+        seen: set[str] = set()
+        for obj in items:
+            if obj.name in seen:
+                errs.append(f"duplicate {kind} name '{obj.name}'.")
+            seen.add(obj.name)
+    return errs
 
 
 def _validate_policy(
