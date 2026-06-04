@@ -1,0 +1,7 @@
+# Custom services (built-in services like HTTPS/HTTP/DNS can be referenced
+# by name directly in firewall_policies.yaml without defining them here).
+services:
+  - name: app-https-8443
+    protocol: TCP
+    tcp_portrange: "8443"
+    comment: "App custom HTTPS port"

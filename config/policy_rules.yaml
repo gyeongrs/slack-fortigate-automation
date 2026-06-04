@@ -1,0 +1,35 @@
+# Safety guardrails enforced by the validator before any plan/apply.
+# These rules are intentionally conservative; tighten them for your environment.
+
+# Reject a firewall policy that opens "any" on these fields.
+forbid_any:
+  srcaddr: true      # source address must not be "all"/"any"
+  dstaddr: true      # destination address must not be "all"/"any"
+  service: true      # service must not be "ALL"/"any"
+
+# Service ports that are never allowed to be opened via automation.
+# (telnet, SMB, RDP-to-the-world, etc. — adjust to your policy)
+forbidden_ports:
+  - 23       # telnet
+  - 135      # msrpc
+  - 137      # netbios
+  - 139      # netbios
+  - 445      # smb
+  - 3389     # rdp (require manual review)
+
+# Only these interfaces may be used as src/dst in automated policies.
+allowed_interfaces:
+  - port1
+  - port2
+  - lan
+  - wan1
+  - dmz
+
+# Every automated policy must set these.
+require:
+  logtraffic: all
+  schedule: always
+
+# Refuse to manage more than this many policy changes in a single apply
+# (a tripwire against accidental mass changes).
+max_changes_per_apply: 10

@@ -1,0 +1,40 @@
+name: validate
+
+# Runs on every PR: offline guardrail validation (always) and, when device
+# secrets are present, an online dry-run plan posted to the job summary.
+on:
+  pull_request:
+    paths:
+      - "policies/**"
+      - "config/**"
+      - "src/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Validate guardrails (offline)
+        run: fwctl validate
+
+      - name: Plan (dry-run, online)
+        if: ${{ env.FORTIGATE_HOST != '' }}
+        env:
+          FORTIGATE_HOST: ${{ secrets.FORTIGATE_HOST }}
+          FORTIGATE_API_TOKEN: ${{ secrets.FORTIGATE_API_TOKEN }}
+          FORTIGATE_VERIFY_TLS: ${{ secrets.FORTIGATE_VERIFY_TLS }}
+        run: |
+          echo '### FortiGate plan' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fwctl plan >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

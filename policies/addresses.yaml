@@ -1,0 +1,13 @@
+# Desired-state address objects on the FortiGate.
+# Managed objects are tagged with comment "managed-by:fwgitops" so the
+# engine never touches manually-created objects.
+addresses:
+  - name: app-web-server
+    type: ipmask
+    subnet: 10.10.20.15/32
+    comment: "Web frontend"
+
+  - name: corp-clients
+    type: ipmask
+    subnet: 10.20.0.0/16
+    comment: "Corporate client subnet"

@@ -1,0 +1,37 @@
+name: apply
+
+# Applies the desired state after a PR is merged to main.
+# Uses a protected "production" environment so a reviewer can gate the apply.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "policies/**"
+      - "config/**"
+
+concurrency:
+  group: fortigate-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Apply to FortiGate
+        env:
+          FORTIGATE_HOST: ${{ secrets.FORTIGATE_HOST }}
+          FORTIGATE_API_TOKEN: ${{ secrets.FORTIGATE_API_TOKEN }}
+          FORTIGATE_VERIFY_TLS: ${{ secrets.FORTIGATE_VERIFY_TLS }}
+        run: fwctl apply --yes
