@@ -1,15 +1,34 @@
-# Desired-state firewall policies.
-# The engine matches existing policies by "name", so names must be unique
-# and stable. Requests coming from Slack append entries here via a PR.
 policies:
-  - name: allow-corp-to-web
-    srcintf: [lan]
-    dstintf: [dmz]
-    srcaddr: [corp-clients]
-    dstaddr: [app-web-server]
-    service: [HTTPS, app-https-8443]
-    action: accept
-    schedule: always
-    logtraffic: all
-    status: enable
-    comment: "Corp clients to web app (ticket: NETOPS-1001)"
+- name: allow-corp-to-web
+  srcintf:
+  - lan
+  dstintf:
+  - dmz
+  srcaddr:
+  - corp-clients
+  dstaddr:
+  - app-web-server
+  service:
+  - HTTPS
+  - app-https-8443
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: 'Corp clients to web app (ticket: NETOPS-1001)'
+- name: test1
+  srcintf:
+  - port1
+  dstintf:
+  - port2
+  srcaddr:
+  - test1
+  dstaddr:
+  - test2
+  service:
+  - HTTP
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by keesd1024 (test)
