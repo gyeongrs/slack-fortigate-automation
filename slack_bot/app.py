@@ -180,10 +180,14 @@ def _split(value: str) -> list[str]:
     return [v.strip() for v in value.replace(",", " ").split() if v.strip()]
 
 
-def _select_target(
+def _select_targets(
     srcaddr: list[str], dstaddr: list[str], addr_objs: list[dict]
-) -> DeviceMatch | None:
-    """Pick the firewall on the traffic path (and its interfaces) from routing.
+) -> list[DeviceMatch]:
+    """Return EVERY firewall the traffic transits (each with its interfaces).
+
+    Traffic between two endpoints can pass through several firewalls in series;
+    each one needs its own allow policy, so we return all transit matches (most
+    specific first), not just the single best.
 
     ``addr_objs`` is the merged address book (repo objects + any auto-created
     ones) so freshly proposed IPs are routable. Devices come from the repo's
@@ -203,18 +207,18 @@ def _select_target(
         dstaddr=dstaddr,
         service=["ANY"],
     )
-    return select_targets(probe, addr_index, devices).chosen
+    return select_targets(probe, addr_index, devices).transit
 
 
-def _validate_request(policy: dict, addr_objs: list[dict]) -> list[str]:
+def _validate_request(policies: list[dict], addr_objs: list[dict]) -> list[str]:
     """Run the same guardrails as CI against the merged definitions plus the
-    requested policy. Returns a list of violations (empty == ok)."""
+    requested policies. Returns a list of violations (empty == ok)."""
     svcs = fetch_repo_yaml("policies/services.yaml").get("services", [])
     rules = fetch_repo_yaml("config/policy_rules.yaml")
     state = DesiredState(
         addresses=[Address(**a) for a in addr_objs],
         services=[Service(**s) for s in svcs],
-        policies=[Policy(**policy)],
+        policies=[Policy(**p) for p in policies],
     )
     return run_validate(state, rules)
 
@@ -271,20 +275,20 @@ def handle_submission(ack, body, view, client):
     new_addresses = src_new + dst_new
     merged_addr_objs = addr_objs + new_addresses
 
-    # Auto-detect the target firewall + interfaces from routing. If no firewall
-    # is on the path (unknown address / no route), we can't determine the
-    # interfaces, so reject up front with a helpful message.
+    # Auto-detect EVERY firewall the traffic transits (it may pass through
+    # several in series; each needs its own allow policy). If none is on the
+    # path, reject up front with a helpful message.
     try:
-        target = _select_target(srcaddr, dstaddr, merged_addr_objs)
+        targets = _select_targets(srcaddr, dstaddr, merged_addr_objs)
     except Exception as exc:
         log.error("route selection failed:\n%s", traceback.format_exc())
         client.chat_postMessage(
             channel=requester_id,
-            text=f":x: Could not auto-detect target firewall: `{exc}`",
+            text=f":x: Could not auto-detect target firewall(s): `{exc}`",
         )
         return
 
-    if target is None or target.src_route is None or target.dst_route is None:
+    if not targets:
         client.chat_postMessage(
             channel=requester_id,
             text=(
@@ -296,28 +300,30 @@ def handle_submission(ack, body, view, client):
         )
         return
 
-    policy = {
-        "name": name,
-        "srcintf": [target.src_route.interface],
-        "dstintf": [target.dst_route.interface],
-        "srcaddr": srcaddr,
-        "dstaddr": dstaddr,
-        "service": service,
-        "action": "accept",
-        "schedule": "always",
-        "logtraffic": "all",
-        "status": "enable",
-        "comment": (
-            f"Requested by {requester} ({justification}) "
-            f"[auto-target: {target.device}]"
-        ),
-    }
+    # One policy per transit firewall, each with that device's interfaces.
+    policies = [
+        {
+            "name": name if len(targets) == 1 else f"{name}-{t.device}",
+            "device": t.device,
+            "srcintf": [t.src_route.interface],
+            "dstintf": [t.dst_route.interface],
+            "srcaddr": srcaddr,
+            "dstaddr": dstaddr,
+            "service": service,
+            "action": "accept",
+            "schedule": "always",
+            "logtraffic": "all",
+            "status": "enable",
+            "comment": f"Requested by {requester} ({justification}) [{t.device}]",
+        }
+        for t in targets
+    ]
 
     # Validate BEFORE opening a PR, using the same guardrails as CI, so bad
     # requests (e.g. referencing undefined address objects) are rejected up
     # front instead of failing later in the apply workflow.
     try:
-        errors = _validate_request(policy, merged_addr_objs)
+        errors = _validate_request(policies, merged_addr_objs)
     except Exception as exc:
         log.error("request validation lookup failed:\n%s", traceback.format_exc())
         errors = []  # fail open to PR; CI will still catch issues
@@ -326,20 +332,22 @@ def handle_submission(ack, body, view, client):
             text=f":warning: Could not pre-validate (CI will still check): `{exc}`",
         )
     if errors:
-        log.info("Rejected request %s: %s", policy["name"], errors)
+        log.info("Rejected request %s: %s", name, errors)
         bullet = "\n".join(f"• {e}" for e in errors)
         client.chat_postMessage(
             channel=requester_id,
             text=(
-                f":no_entry: Request *{policy['name']}* rejected (no PR created):\n"
+                f":no_entry: Request *{name}* rejected (no PR created):\n"
                 f"{bullet}"
             ),
         )
         return
 
     try:
-        pr = open_policy_pr(policy, requester, justification, new_addresses)
-        log.info("Opened PR #%s for policy %s", pr["number"], policy["name"])
+        pr = open_policy_pr(
+            policies, name, requester, justification, new_addresses
+        )
+        log.info("Opened PR #%s for %s (%d firewall(s))", pr["number"], name, len(policies))
     except Exception as exc:  # GitHub failure (repo/token/branch) — tell requester
         log.error("open_policy_pr failed:\n%s", traceback.format_exc())
         client.chat_postMessage(
@@ -348,10 +356,14 @@ def handle_submission(ack, body, view, client):
         )
         return
 
+    lines = [
+        f"• *{t.device}*: srcintf `{t.src_route.interface}` -> "
+        f"dstintf `{t.dst_route.interface}`"
+        for t in targets
+    ]
     target_desc = (
-        f":satellite: Auto-target: *{target.device}* "
-        f"(srcintf `{target.src_route.interface}` -> "
-        f"dstintf `{target.dst_route.interface}`)"
+        f":satellite: Auto-target firewall(s) on the path ({len(targets)}):\n"
+        + "\n".join(lines)
     )
     if new_addresses:
         created = ", ".join(f"`{a['name']}` ({a['subnet']})" for a in new_addresses)
@@ -359,8 +371,8 @@ def handle_submission(ack, body, view, client):
     try:
         client.chat_postMessage(
             channel=channel,
-            text=f"Firewall request: {policy['name']} (PR #{pr['number']})",
-            blocks=_approval_blocks(policy["name"], requester_id, pr, target_desc),
+            text=f"Firewall request: {name} (PR #{pr['number']})",
+            blocks=_approval_blocks(name, requester_id, pr, target_desc),
         )
     except Exception as exc:  # Slack post failure (e.g. not_in_channel)
         log.error("chat_postMessage to %s failed:\n%s", channel, traceback.format_exc())

@@ -160,7 +160,7 @@ def select() -> None:
 
     for policy in state.policies:
         selection = select_targets(policy, addr_index, devices)
-        chosen = selection.chosen
+        targets = selection.transit  # every firewall the traffic transits
 
         table = Table(title=f"Policy '{policy.name}'  ({_endpoints(policy)})")
         table.add_column("Firewall")
@@ -168,11 +168,10 @@ def select() -> None:
         table.add_column("dst route")
         table.add_column("Verdict")
         for m in selection.matches:
-            picked = chosen is not None and m.device == chosen.device
             verdict = (
                 "[bold green]TARGET[/bold green]"
-                if picked
-                else ("[yellow]transit[/yellow]" if m.is_transit else "[dim]skip[/dim]")
+                if m.is_transit
+                else "[dim]skip[/dim]"
             )
             table.add_row(
                 m.device,
@@ -181,17 +180,18 @@ def select() -> None:
                 f"{verdict}  [dim]{m.reason}[/dim]",
             )
         console.print(table)
-        if chosen is None:
+        if not targets:
             console.print(
                 "  [bold red]No firewall is on the path for this policy.[/bold red]"
             )
         else:
-            ci = chosen.src_route.interface  # type: ignore[union-attr]
-            co = chosen.dst_route.interface  # type: ignore[union-attr]
-            console.print(
-                f"  -> target: [bold green]{chosen.device}[/bold green] "
-                f"(srcintf={ci}, dstintf={co})"
-            )
+            for m in targets:
+                ci = m.src_route.interface  # type: ignore[union-attr]
+                co = m.dst_route.interface  # type: ignore[union-attr]
+                console.print(
+                    f"  -> target: [bold green]{m.device}[/bold green] "
+                    f"(srcintf={ci}, dstintf={co})"
+                )
         console.print()
 
 

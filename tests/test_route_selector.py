@@ -113,6 +113,17 @@ def test_corp_to_partner_selects_exco_fw():
     assert sel.chosen.dst_route.interface == "exco-untrust"
 
 
+def test_aws_to_mgmt_transits_three_firewalls():
+    # 10.52.10.1 -> 10.99.5.10 passes through inet-fw, core-fw and mgt-fw in
+    # series; all three must be returned (exco-fw is not on the path).
+    pol = _policy("p", "AWS", "mgmt-host")
+    sel = select_targets(pol, _ADDR_INDEX, _DEVICES)
+    devices = [m.device for m in sel.transit]
+    assert set(devices) == {"core-fw", "inet-fw", "mgt-fw"}
+    assert "exco-fw" not in devices
+    assert devices[0] == "core-fw"  # most specific path first
+
+
 def test_same_interface_is_not_transit():
     # Source and destination both resolve to the same interface -> not transit.
     dev = Device(

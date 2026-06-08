@@ -47,21 +47,25 @@ def fetch_repo_yaml(path: str) -> dict:
 
 
 def open_policy_pr(
-    policy: dict,
+    policies: list[dict],
+    base_name: str,
     requester: str,
     justification: str,
     new_addresses: list[dict] | None = None,
 ) -> dict:
-    """Append `policy` to firewall_policies.yaml on a new branch and open a PR.
+    """Append one or more per-firewall `policies` to firewall_policies.yaml on a
+    new branch and open a PR.
 
-    Any `new_addresses` (auto-created from IP/CIDR inputs that matched no
-    existing object) are committed to addresses.yaml on the same branch first,
-    so the policy's referential integrity holds.
+    A request whose traffic transits several firewalls produces one policy per
+    firewall (each with that device's interfaces). Any `new_addresses`
+    (auto-created from IP/CIDR inputs that matched no existing object) are
+    committed to addresses.yaml on the same branch first, so referential
+    integrity holds.
 
     Returns {"url": <html_url>, "number": <pr_number>}.
     """
     cfg = GitHubConfig()
-    branch = f"fw-request/{_slug(policy['name'])}-{int(time.time())}"
+    branch = f"fw-request/{_slug(base_name)}-{int(time.time())}"
     new_addresses = new_addresses or []
 
     with httpx.Client(headers=cfg.headers, timeout=30) as client:
@@ -83,7 +87,8 @@ def open_policy_pr(
             )
 
         file_sha, content = _get_file(client, cfg, POLICY_PATH, cfg.base)
-        updated = _append_policy(content, policy)
+        updated = _append_policies(content, policies)
+        devices = ", ".join(p.get("device") or "?" for p in policies)
         _commit_file(
             client,
             cfg,
@@ -91,10 +96,11 @@ def open_policy_pr(
             POLICY_PATH,
             updated,
             file_sha,
-            message=f"fw-request: {policy['name']} (by {requester})",
+            message=f"fw-request: {base_name} on {devices} (by {requester})",
         )
         return _create_pr(
-            client, cfg, branch, policy, requester, justification, new_addresses
+            client, cfg, branch, base_name, policies, requester,
+            justification, new_addresses,
         )
 
 
@@ -152,10 +158,10 @@ def _get_file(
     return data["sha"], content
 
 
-def _append_policy(content: str, policy: dict) -> str:
+def _append_policies(content: str, new_policies: list[dict]) -> str:
     doc = yaml.safe_load(content) or {}
     policies = doc.get("policies") or []
-    policies.append(policy)
+    policies.extend(new_policies)
     doc["policies"] = policies
     return yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
 
@@ -197,7 +203,8 @@ def _create_pr(
     client: httpx.Client,
     cfg: GitHubConfig,
     branch: str,
-    policy: dict,
+    base_name: str,
+    policies: list[dict],
     requester: str,
     justification: str,
     new_addresses: list[dict] | None = None,
@@ -212,18 +219,23 @@ def _create_pr(
             )
             + "```\n\n"
         )
+    devices = ", ".join(p.get("device") or "?" for p in policies)
     body = (
         f"**Requester:** {requester}\n"
-        f"**Justification:** {justification}\n\n"
+        f"**Justification:** {justification}\n"
+        f"**Target firewalls (route-selected):** {devices}\n\n"
         + addr_section
-        + "```yaml\n" + yaml.safe_dump(policy, sort_keys=False, allow_unicode=True)
+        + "**Per-firewall policies:**\n```yaml\n"
+        + yaml.safe_dump(
+            {"policies": policies}, sort_keys=False, allow_unicode=True
+        )
         + "```\n\n"
         "_CI will validate guardrails and show a plan. Merge to apply._"
     )
     r = client.post(
         f"{API}/repos/{cfg.repo}/pulls",
         json={
-            "title": f"fw-request: {policy['name']}",
+            "title": f"fw-request: {base_name} ({devices})",
             "head": branch,
             "base": cfg.base,
             "body": body,

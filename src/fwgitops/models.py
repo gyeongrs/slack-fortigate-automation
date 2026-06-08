@@ -33,6 +33,7 @@ class Policy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
+    device: str | None = None  # target firewall (route-selected); None = default
     srcintf: list[str]
     dstintf: list[str]
     srcaddr: list[str]
