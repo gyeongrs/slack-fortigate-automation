@@ -1,38 +1,37 @@
-# Desired-state address objects on the FortiGate.
-# Managed objects are tagged with comment "managed-by:fwgitops" so the
-# engine never touches manually-created objects.
 addresses:
-  - name: app-web-server
-    type: ipmask
-    subnet: 10.10.20.15/32
-    comment: "Web frontend"
-
-  - name: corp-clients
-    type: ipmask
-    subnet: 10.20.0.0/16
-    comment: "Corporate client subnet"
-
-  - name: AWS-10.52.10.1
-    type: ipmask
-    subnet: 10.52.10.1/32
-    comment: "AWS Server"
-
-  - name: Azure-10.56.10.1
-    type: ipmask
-    subnet: 10.56.10.1/32
-    comment: "Azure Server"
-
-  - name: mgmt-host
-    type: ipmask
-    subnet: 10.99.5.10/32
-    comment: "Management host (behind mgt-fw)"
-
-  - name: partner-host
-    type: ipmask
-    subnet: 172.16.8.20/32
-    comment: "External partner host (behind exco-fw)"
-
-  - name: AWS_MGT_10.20.1.10/32
-    type: ipmask
-    subnet: 10.20.1.10/32
-    comment: AWS_MGT-Test"
+- name: app-web-server
+  type: ipmask
+  subnet: 10.10.20.15/32
+  comment: Web frontend
+- name: corp-clients
+  type: ipmask
+  subnet: 10.20.0.0/16
+  comment: Corporate client subnet
+- name: AWS-10.52.10.1
+  type: ipmask
+  subnet: 10.52.10.1/32
+  comment: AWS Server
+- name: Azure-10.56.10.1
+  type: ipmask
+  subnet: 10.56.10.1/32
+  comment: Azure Server
+- name: mgmt-host
+  type: ipmask
+  subnet: 10.99.5.10/32
+  comment: Management host (behind mgt-fw)
+- name: partner-host
+  type: ipmask
+  subnet: 172.16.8.20/32
+  comment: External partner host (behind exco-fw)
+- name: AWS_MGT_10.20.1.10/32
+  type: ipmask
+  subnet: 10.20.1.10/32
+  comment: AWS_MGT-Test"
+- name: auto-10.20.1.1
+  type: ipmask
+  subnet: 10.20.1.1/32
+  comment: Auto-created from Slack request by gyeongrs
+- name: auto-10.99.5.20
+  type: ipmask
+  subnet: 10.99.5.20/32
+  comment: Auto-created from Slack request by gyeongrs
