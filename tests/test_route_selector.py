@@ -21,7 +21,9 @@ _CORE_FW = Device(
     name="core-fw",
     routes=[
         Route(dst="10.20.0.0/16", interface="core-trust", type="connected"),
+        Route(dst="10.99.5.10/32", interface="core-trust", type="static"),
         Route(dst="10.10.20.0/24", interface="dmz", type="connected"),
+        Route(dst="10.52.10.1/32", interface="core-untrust", type="static"),
         Route(dst="0.0.0.0/0", interface="core-untrust", type="default"),
     ],
 )
@@ -32,6 +34,7 @@ _INET_FW = Device(
         Route(dst="10.52.0.0/16", interface="inet-untrust", type="static"),
         Route(dst="10.56.0.0/16", interface="inet-untrust", type="static"),
         Route(dst="10.20.0.0/16", interface="inet-trust", type="static"),
+        Route(dst="10.99.5.0/24", interface="inet-trust", type="static"),
         Route(dst="0.0.0.0/0", interface="inet-untrust", type="default"),
     ],
 )
@@ -39,7 +42,8 @@ _INET_FW = Device(
 _MGT_FW = Device(
     name="mgt-fw",
     routes=[
-        Route(dst="10.99.0.0/16", interface="mgmt-trust", type="connected"),
+        Route(dst="10.99.5.0/24", interface="mgmt-trust", type="connected"),
+        Route(dst="10.52.10.0/24", interface="mgmt-untrust", type="connected"),
         Route(dst="10.20.0.0/16", interface="mgmt-untrust", type="static"),
         Route(dst="0.0.0.0/0", interface="mgmt-untrust", type="default"),
     ],
@@ -78,13 +82,15 @@ def test_corp_to_web_selects_core_fw():
     assert sel.chosen.dst_route.interface == "dmz"
 
 
-def test_corp_to_cloud_selects_inet_fw():
-    # inet-fw has a specific /16 to the cloud; the others only a default route.
+def test_corp_to_cloud_selects_core_fw_via_host_route():
+    # core-fw has a /32 host route to the AWS server (more specific than
+    # inet-fw's /16), so longest-prefix-match picks core-fw.
     pol = _policy("p", "corp-clients", "AWS")
     sel = select_targets(pol, _ADDR_INDEX, _DEVICES)
     assert sel.chosen is not None
-    assert sel.chosen.device == "inet-fw"
-    assert sel.chosen.dst_route.interface == "inet-untrust"
+    assert sel.chosen.device == "core-fw"
+    assert sel.chosen.src_route.interface == "core-trust"
+    assert sel.chosen.dst_route.interface == "core-untrust"
 
 
 def test_corp_to_mgmt_selects_mgt_fw():

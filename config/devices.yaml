@@ -20,14 +20,24 @@ devices:
     vdom: root
     token_env: FORTIGATE_API_TOKEN_CORE
     routes:
-      # corporate clients sit behind the trust/lan side
+      # corporate clients sit behind the trust side
       - dst: 10.20.0.0/16
         interface: core-trust
         type: connected
+      # management host reachable via the trust side
+      - dst: 10.99.5.10/32
+        interface: core-trust
+        gateway: 10.20.0.1
+        type: static
       # web/DMZ segment
       - dst: 10.10.20.0/24
         interface: dmz
         type: connected
+      # specific host route to the cloud server via the internet edge
+      - dst: 10.52.10.1/32
+        interface: core-untrust
+        gateway: 10.0.0.254
+        type: static
       # everything else leaves via the internet edge
       - dst: 0.0.0.0/0
         interface: core-untrust
@@ -53,6 +63,11 @@ devices:
         interface: inet-trust
         gateway: 10.0.0.1
         type: static
+      # management subnet via the corporate core
+      - dst: 10.99.5.0/24
+        interface: inet-trust
+        gateway: 10.0.0.1
+        type: static
       - dst: 0.0.0.0/0
         interface: inet-untrust
         gateway: 10.0.0.254
@@ -64,8 +79,12 @@ devices:
     token_env: FORTIGATE_API_TOKEN_MGT
     routes:
       # dedicated management segment lives behind this firewall
-      - dst: 10.99.0.0/16
+      - dst: 10.99.5.0/24
         interface: mgmt-trust
+        type: connected
+      # directly-connected cloud-facing management subnet
+      - dst: 10.52.10.0/24
+        interface: mgmt-untrust
         type: connected
       # reach the rest of the corporate network via the core
       - dst: 10.20.0.0/16

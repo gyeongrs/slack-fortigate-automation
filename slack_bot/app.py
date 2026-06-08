@@ -30,6 +30,7 @@ from fastapi import FastAPI, Request
 from slack_bolt import App
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 
+from fwgitops.address_resolver import resolve_addresses
 from fwgitops.models import Address, DesiredState, Policy, Service
 from fwgitops.route_selector import (
     DeviceMatch,
@@ -88,15 +89,20 @@ def _modal() -> dict:
                     {
                         "type": "mrkdwn",
                         "text": (
-                            ":satellite: The target firewall and interfaces are "
-                            "auto-detected from routing — just pick addresses & service."
+                            ":satellite: Target firewall & interfaces are "
+                            "auto-detected from routing. Addresses accept an "
+                            "object name *or* an IP/CIDR (e.g. `10.99.5.10/32`)."
                         ),
                     }
                 ],
             },
             text_input("name", "Policy name", "allow-corp-to-app"),
-            text_input("srcaddr", "Source address object(s)", "corp-clients"),
-            text_input("dstaddr", "Dest address object(s)", "app-web-server"),
+            text_input(
+                "srcaddr", "Source (object name or IP/CIDR)", "corp-clients or 10.20.0.0/16"
+            ),
+            text_input(
+                "dstaddr", "Destination (object name or IP/CIDR)", "app-web-server or 10.99.5.10/32"
+            ),
             text_input("service", "Service(s)", "HTTPS, app-https-8443"),
             text_input("justification", "Justification / ticket", "NETOPS-1001"),
         ],
@@ -174,14 +180,16 @@ def _split(value: str) -> list[str]:
     return [v.strip() for v in value.replace(",", " ").split() if v.strip()]
 
 
-def _select_target(srcaddr: list[str], dstaddr: list[str]) -> DeviceMatch | None:
+def _select_target(
+    srcaddr: list[str], dstaddr: list[str], addr_objs: list[dict]
+) -> DeviceMatch | None:
     """Pick the firewall on the traffic path (and its interfaces) from routing.
 
-    Uses the repo's address book + config/devices.yaml. Falls back to the local
-    devices.yaml if it hasn't been pushed to the repo yet.
+    ``addr_objs`` is the merged address book (repo objects + any auto-created
+    ones) so freshly proposed IPs are routable. Devices come from the repo's
+    config/devices.yaml, falling back to the local file if not yet pushed.
     """
-    addrs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
-    addr_index = {a["name"]: Address(**a) for a in addrs}
+    addr_index = {a["name"]: Address(**a) for a in addr_objs}
 
     devices = devices_from_dict(fetch_repo_yaml("config/devices.yaml"))
     if not devices:
@@ -198,14 +206,13 @@ def _select_target(srcaddr: list[str], dstaddr: list[str]) -> DeviceMatch | None
     return select_targets(probe, addr_index, devices).chosen
 
 
-def _validate_request(policy: dict) -> list[str]:
-    """Run the same guardrails as CI against the repo's current definitions
-    plus the requested policy. Returns a list of violations (empty == ok)."""
-    addrs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
+def _validate_request(policy: dict, addr_objs: list[dict]) -> list[str]:
+    """Run the same guardrails as CI against the merged definitions plus the
+    requested policy. Returns a list of violations (empty == ok)."""
     svcs = fetch_repo_yaml("policies/services.yaml").get("services", [])
     rules = fetch_repo_yaml("config/policy_rules.yaml")
     state = DesiredState(
-        addresses=[Address(**a) for a in addrs],
+        addresses=[Address(**a) for a in addr_objs],
         services=[Service(**s) for s in svcs],
         policies=[Policy(**policy)],
     )
@@ -231,11 +238,44 @@ def handle_submission(ack, body, view, client):
 
     channel = os.getenv("SLACK_NOTIFY_CHANNEL", requester_id)
 
+    # Resolve IP / CIDR inputs (e.g. 10.99.5.10/32) to existing address object
+    # names by matching the address book. Object names pass through unchanged.
+    try:
+        addr_objs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
+    except Exception as exc:
+        log.error("address book lookup failed:\n%s", traceback.format_exc())
+        client.chat_postMessage(
+            channel=requester_id,
+            text=f":x: Could not read the address book: `{exc}`",
+        )
+        return
+
+    autocomment = f"Auto-created from Slack request by {requester}"
+    src_names, src_new, src_bad = resolve_addresses(
+        srcaddr, addr_objs, autocomment, autocreate=True
+    )
+    dst_names, dst_new, dst_bad = resolve_addresses(
+        dstaddr, addr_objs + src_new, autocomment, autocreate=True
+    )
+    if src_bad or dst_bad:
+        bad = ", ".join(f"`{b}`" for b in (src_bad + dst_bad))
+        client.chat_postMessage(
+            channel=requester_id,
+            text=(
+                f":no_entry: Request *{name}* rejected (no PR created): "
+                f"{bad} is neither a known object name nor a valid IP/CIDR."
+            ),
+        )
+        return
+    srcaddr, dstaddr = src_names, dst_names
+    new_addresses = src_new + dst_new
+    merged_addr_objs = addr_objs + new_addresses
+
     # Auto-detect the target firewall + interfaces from routing. If no firewall
     # is on the path (unknown address / no route), we can't determine the
     # interfaces, so reject up front with a helpful message.
     try:
-        target = _select_target(srcaddr, dstaddr)
+        target = _select_target(srcaddr, dstaddr, merged_addr_objs)
     except Exception as exc:
         log.error("route selection failed:\n%s", traceback.format_exc())
         client.chat_postMessage(
@@ -250,9 +290,8 @@ def handle_submission(ack, body, view, client):
             text=(
                 f":no_entry: Request *{name}* rejected (no PR created): no "
                 "firewall is on the path between the source and destination.\n"
-                "_Check that both address objects exist in "
-                "`policies/addresses.yaml` and that a device in "
-                "`config/devices.yaml` routes between them._"
+                "_No device in `config/devices.yaml` routes between these "
+                "endpoints (src and dst must transit a firewall)._"
             ),
         )
         return
@@ -278,7 +317,7 @@ def handle_submission(ack, body, view, client):
     # requests (e.g. referencing undefined address objects) are rejected up
     # front instead of failing later in the apply workflow.
     try:
-        errors = _validate_request(policy)
+        errors = _validate_request(policy, merged_addr_objs)
     except Exception as exc:
         log.error("request validation lookup failed:\n%s", traceback.format_exc())
         errors = []  # fail open to PR; CI will still catch issues
@@ -293,14 +332,13 @@ def handle_submission(ack, body, view, client):
             channel=requester_id,
             text=(
                 f":no_entry: Request *{policy['name']}* rejected (no PR created):\n"
-                f"{bullet}\n\n_Tip: address objects must already exist in "
-                "`policies/addresses.yaml`._"
+                f"{bullet}"
             ),
         )
         return
 
     try:
-        pr = open_policy_pr(policy, requester, justification)
+        pr = open_policy_pr(policy, requester, justification, new_addresses)
         log.info("Opened PR #%s for policy %s", pr["number"], policy["name"])
     except Exception as exc:  # GitHub failure (repo/token/branch) — tell requester
         log.error("open_policy_pr failed:\n%s", traceback.format_exc())
@@ -315,6 +353,9 @@ def handle_submission(ack, body, view, client):
         f"(srcintf `{target.src_route.interface}` -> "
         f"dstintf `{target.dst_route.interface}`)"
     )
+    if new_addresses:
+        created = ", ".join(f"`{a['name']}` ({a['subnet']})" for a in new_addresses)
+        target_desc += f"\n:new: Auto-created address object(s): {created}"
     try:
         client.chat_postMessage(
             channel=channel,

@@ -15,6 +15,7 @@ import yaml
 
 API = "https://api.github.com"
 POLICY_PATH = "policies/firewall_policies.yaml"
+ADDRESS_PATH = "policies/addresses.yaml"
 
 
 class GitHubConfig:
@@ -45,17 +46,42 @@ def fetch_repo_yaml(path: str) -> dict:
     return yaml.safe_load(content) or {}
 
 
-def open_policy_pr(policy: dict, requester: str, justification: str) -> dict:
+def open_policy_pr(
+    policy: dict,
+    requester: str,
+    justification: str,
+    new_addresses: list[dict] | None = None,
+) -> dict:
     """Append `policy` to firewall_policies.yaml on a new branch and open a PR.
+
+    Any `new_addresses` (auto-created from IP/CIDR inputs that matched no
+    existing object) are committed to addresses.yaml on the same branch first,
+    so the policy's referential integrity holds.
 
     Returns {"url": <html_url>, "number": <pr_number>}.
     """
     cfg = GitHubConfig()
     branch = f"fw-request/{_slug(policy['name'])}-{int(time.time())}"
+    new_addresses = new_addresses or []
 
     with httpx.Client(headers=cfg.headers, timeout=30) as client:
         base_sha = _branch_sha(client, cfg, cfg.base)
         _create_branch(client, cfg, branch, base_sha)
+
+        if new_addresses:
+            addr_sha, addr_content = _get_file(client, cfg, ADDRESS_PATH, cfg.base)
+            updated_addrs = _append_addresses(addr_content, new_addresses)
+            names = ", ".join(a["name"] for a in new_addresses)
+            _commit_file(
+                client,
+                cfg,
+                branch,
+                ADDRESS_PATH,
+                updated_addrs,
+                addr_sha,
+                message=f"fw-request: add address {names} (by {requester})",
+            )
+
         file_sha, content = _get_file(client, cfg, POLICY_PATH, cfg.base)
         updated = _append_policy(content, policy)
         _commit_file(
@@ -67,7 +93,9 @@ def open_policy_pr(policy: dict, requester: str, justification: str) -> dict:
             file_sha,
             message=f"fw-request: {policy['name']} (by {requester})",
         )
-        return _create_pr(client, cfg, branch, policy, requester, justification)
+        return _create_pr(
+            client, cfg, branch, policy, requester, justification, new_addresses
+        )
 
 
 def merge_pr(number: int, approver: str) -> str:
@@ -132,6 +160,18 @@ def _append_policy(content: str, policy: dict) -> str:
     return yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
 
 
+def _append_addresses(content: str, new_addrs: list[dict]) -> str:
+    doc = yaml.safe_load(content) or {}
+    addresses = doc.get("addresses") or []
+    existing = {a.get("name") for a in addresses}
+    for a in new_addrs:
+        if a["name"] not in existing:
+            addresses.append(a)
+            existing.add(a["name"])
+    doc["addresses"] = addresses
+    return yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
+
+
 def _commit_file(
     client: httpx.Client,
     cfg: GitHubConfig,
@@ -160,11 +200,23 @@ def _create_pr(
     policy: dict,
     requester: str,
     justification: str,
+    new_addresses: list[dict] | None = None,
 ) -> dict:
+    new_addresses = new_addresses or []
+    addr_section = ""
+    if new_addresses:
+        addr_section = (
+            "**Auto-created address objects:**\n```yaml\n"
+            + yaml.safe_dump(
+                {"addresses": new_addresses}, sort_keys=False, allow_unicode=True
+            )
+            + "```\n\n"
+        )
     body = (
         f"**Requester:** {requester}\n"
         f"**Justification:** {justification}\n\n"
-        "```yaml\n" + yaml.safe_dump(policy, sort_keys=False, allow_unicode=True)
+        + addr_section
+        + "```yaml\n" + yaml.safe_dump(policy, sort_keys=False, allow_unicode=True)
         + "```\n\n"
         "_CI will validate guardrails and show a plan. Merge to apply._"
     )
