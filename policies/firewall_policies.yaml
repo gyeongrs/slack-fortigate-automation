@@ -96,3 +96,19 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (Test)
+- name: core>mgt
+  srcintf:
+  - mgmt-trust
+  dstintf:
+  - mgmt-untrust
+  srcaddr:
+  - mgmt-host
+  dstaddr:
+  - AWS_MGT_10.20.1.10/32
+  service:
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: 'Requested by gyeongrs (policy-test) [auto-target: mgt-fw]'
