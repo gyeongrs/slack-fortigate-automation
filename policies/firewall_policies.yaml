@@ -16,6 +16,54 @@ policies:
   logtraffic: all
   status: enable
   comment: 'Corp clients to web app (ticket: NETOPS-1001)'
+- name: allow-corp-to-aws
+  srcintf:
+  - inet-trust
+  dstintf:
+  - inet-untrust
+  srcaddr:
+  - corp-clients
+  dstaddr:
+  - AWS-10.52.10.1
+  service:
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: 'Corp clients to AWS (expect target: inet-fw)'
+- name: allow-corp-to-mgmt
+  srcintf:
+  - mgmt-untrust
+  dstintf:
+  - mgmt-trust
+  srcaddr:
+  - corp-clients
+  dstaddr:
+  - mgmt-host
+  service:
+  - SSH
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: 'Corp clients to management host (expect target: mgt-fw)'
+- name: allow-corp-to-partner
+  srcintf:
+  - exco-trust
+  dstintf:
+  - exco-untrust
+  srcaddr:
+  - corp-clients
+  dstaddr:
+  - partner-host
+  service:
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: 'Corp clients to external partner (expect target: exco-fw)'
 - name: test1
   srcintf:
   - port1

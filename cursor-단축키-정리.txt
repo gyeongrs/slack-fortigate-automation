@@ -110,3 +110,7 @@ Escape                    명령 수락
 정확한 최신 값은 Ctrl+R → Ctrl+S 의 Keyboard Shortcuts에서
 각 명령을 검색해 확인하세요.
 ============================================================
+
+
+> .\.venv\Scripts\Activate.ps1
+>> python -m slack_bot.app

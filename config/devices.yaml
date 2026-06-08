@@ -1,0 +1,98 @@
+# Firewall inventory used for route-aware target selection.
+#
+# In dry-run mode (FORTIGATE_DRY_RUN=true) the "routes" block below is used as a
+# mock routing table (FIB) so the selection logic can be tested without any
+# hardware. With a live device the routes would instead come from
+#   GET /api/v2/monitor/router/lookup?destination=<ip>
+#
+# A device is chosen as the policy target when the requested traffic *transits*
+# it: the source resolves to one interface and the destination to a different
+# interface (i.e. the firewall sits on the path between them). When several
+# firewalls are on the path, the one with the most specific routes (longest
+# prefix match) is recommended.
+#
+# token_env: name of the environment variable holding that device's API token
+#            (only needed when actually applying against hardware).
+
+devices:
+  - name: core-fw
+    host: 10.0.0.1
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_CORE
+    routes:
+      # corporate clients sit behind the trust/lan side
+      - dst: 10.20.0.0/16
+        interface: core-trust
+        type: connected
+      # web/DMZ segment
+      - dst: 10.10.20.0/24
+        interface: dmz
+        type: connected
+      # everything else leaves via the internet edge
+      - dst: 0.0.0.0/0
+        interface: core-untrust
+        gateway: 10.0.0.254
+        type: default
+
+  - name: inet-fw
+    host: 10.0.0.2
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_INET
+    routes:
+      # cloud networks reachable through this edge firewall
+      - dst: 10.52.0.0/16
+        interface: inet-untrust
+        gateway: 10.52.0.254
+        type: static
+      - dst: 10.56.0.0/16
+        interface: inet-untrust
+        gateway: 10.56.0.254
+        type: static
+      # back toward the corporate core
+      - dst: 10.20.0.0/16
+        interface: inet-trust
+        gateway: 10.0.0.1
+        type: static
+      - dst: 0.0.0.0/0
+        interface: inet-untrust
+        gateway: 10.0.0.254
+        type: default
+
+  - name: mgt-fw
+    host: 10.0.0.3
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_MGT
+    routes:
+      # dedicated management segment lives behind this firewall
+      - dst: 10.99.0.0/16
+        interface: mgmt-trust
+        type: connected
+      # reach the rest of the corporate network via the core
+      - dst: 10.20.0.0/16
+        interface: mgmt-untrust
+        gateway: 10.0.0.1
+        type: static
+      - dst: 0.0.0.0/0
+        interface: mgmt-untrust
+        gateway: 10.0.0.254
+        type: default
+
+  - name: exco-fw
+    host: 10.0.0.4
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_EXCO
+    routes:
+      # external company / partner (extranet) networks
+      - dst: 172.16.0.0/12
+        interface: exco-untrust
+        gateway: 172.16.0.254
+        type: static
+      # internal side aggregates the whole corporate space
+      - dst: 10.0.0.0/8
+        interface: exco-trust
+        gateway: 10.0.0.1
+        type: static
+      - dst: 0.0.0.0/0
+        interface: exco-untrust
+        gateway: 172.16.0.254
+        type: default

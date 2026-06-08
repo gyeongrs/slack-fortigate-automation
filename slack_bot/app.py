@@ -31,6 +31,12 @@ from slack_bolt import App
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 
 from fwgitops.models import Address, DesiredState, Policy, Service
+from fwgitops.route_selector import (
+    DeviceMatch,
+    devices_from_dict,
+    load_devices,
+    select_targets,
+)
 from fwgitops.validator import validate as run_validate
 
 from .github_pr import close_pr, fetch_repo_yaml, merge_pr, open_policy_pr
@@ -76,9 +82,19 @@ def _modal() -> dict:
         "submit": {"type": "plain_text", "text": "Open PR"},
         "close": {"type": "plain_text", "text": "Cancel"},
         "blocks": [
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": (
+                            ":satellite: The target firewall and interfaces are "
+                            "auto-detected from routing — just pick addresses & service."
+                        ),
+                    }
+                ],
+            },
             text_input("name", "Policy name", "allow-corp-to-app"),
-            text_input("srcintf", "Source interface(s)", "lan"),
-            text_input("dstintf", "Dest interface(s)", "dmz"),
             text_input("srcaddr", "Source address object(s)", "corp-clients"),
             text_input("dstaddr", "Dest address object(s)", "app-web-server"),
             text_input("service", "Service(s)", "HTTPS, app-https-8443"),
@@ -87,12 +103,15 @@ def _modal() -> dict:
     }
 
 
-def _approval_blocks(policy_name: str, requester_id: str, pr: dict) -> list[dict]:
+def _approval_blocks(
+    policy_name: str, requester_id: str, pr: dict, target_desc: str = ""
+) -> list[dict]:
     """Message with Approve / Reject buttons. The button `value` carries the
     context needed by the action handlers (PR number + requester)."""
     payload = json.dumps(
         {"pr": pr["number"], "requester": requester_id, "name": policy_name}
     )
+    target_line = f"\n{target_desc}" if target_desc else ""
     return [
         {
             "type": "section",
@@ -100,7 +119,7 @@ def _approval_blocks(policy_name: str, requester_id: str, pr: dict) -> list[dict
                 "type": "mrkdwn",
                 "text": (
                     f":memo: <@{requester_id}> requested firewall policy "
-                    f"*{policy_name}*.\nReview: {pr['url']}\n"
+                    f"*{policy_name}*.{target_line}\nReview: {pr['url']}\n"
                     "_Another team member must approve (not the requester)._"
                 ),
             },
@@ -155,6 +174,30 @@ def _split(value: str) -> list[str]:
     return [v.strip() for v in value.replace(",", " ").split() if v.strip()]
 
 
+def _select_target(srcaddr: list[str], dstaddr: list[str]) -> DeviceMatch | None:
+    """Pick the firewall on the traffic path (and its interfaces) from routing.
+
+    Uses the repo's address book + config/devices.yaml. Falls back to the local
+    devices.yaml if it hasn't been pushed to the repo yet.
+    """
+    addrs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
+    addr_index = {a["name"]: Address(**a) for a in addrs}
+
+    devices = devices_from_dict(fetch_repo_yaml("config/devices.yaml"))
+    if not devices:
+        devices = load_devices()  # local fallback
+
+    probe = Policy(
+        name="_probe",
+        srcintf=["auto"],
+        dstintf=["auto"],
+        srcaddr=srcaddr,
+        dstaddr=dstaddr,
+        service=["ANY"],
+    )
+    return select_targets(probe, addr_index, devices).chosen
+
+
 def _validate_request(policy: dict) -> list[str]:
     """Run the same guardrails as CI against the repo's current definitions
     plus the requested policy. Returns a list of violations (empty == ok)."""
@@ -181,21 +224,55 @@ def handle_submission(ack, body, view, client):
     requester = body["user"]["username"]
     justification = field("justification")
 
+    name = field("name")
+    srcaddr = _split(field("srcaddr"))
+    dstaddr = _split(field("dstaddr"))
+    service = _split(field("service"))
+
+    channel = os.getenv("SLACK_NOTIFY_CHANNEL", requester_id)
+
+    # Auto-detect the target firewall + interfaces from routing. If no firewall
+    # is on the path (unknown address / no route), we can't determine the
+    # interfaces, so reject up front with a helpful message.
+    try:
+        target = _select_target(srcaddr, dstaddr)
+    except Exception as exc:
+        log.error("route selection failed:\n%s", traceback.format_exc())
+        client.chat_postMessage(
+            channel=requester_id,
+            text=f":x: Could not auto-detect target firewall: `{exc}`",
+        )
+        return
+
+    if target is None or target.src_route is None or target.dst_route is None:
+        client.chat_postMessage(
+            channel=requester_id,
+            text=(
+                f":no_entry: Request *{name}* rejected (no PR created): no "
+                "firewall is on the path between the source and destination.\n"
+                "_Check that both address objects exist in "
+                "`policies/addresses.yaml` and that a device in "
+                "`config/devices.yaml` routes between them._"
+            ),
+        )
+        return
+
     policy = {
-        "name": field("name"),
-        "srcintf": _split(field("srcintf")),
-        "dstintf": _split(field("dstintf")),
-        "srcaddr": _split(field("srcaddr")),
-        "dstaddr": _split(field("dstaddr")),
-        "service": _split(field("service")),
+        "name": name,
+        "srcintf": [target.src_route.interface],
+        "dstintf": [target.dst_route.interface],
+        "srcaddr": srcaddr,
+        "dstaddr": dstaddr,
+        "service": service,
         "action": "accept",
         "schedule": "always",
         "logtraffic": "all",
         "status": "enable",
-        "comment": f"Requested by {requester} ({justification})",
+        "comment": (
+            f"Requested by {requester} ({justification}) "
+            f"[auto-target: {target.device}]"
+        ),
     }
-
-    channel = os.getenv("SLACK_NOTIFY_CHANNEL", requester_id)
 
     # Validate BEFORE opening a PR, using the same guardrails as CI, so bad
     # requests (e.g. referencing undefined address objects) are rejected up
@@ -233,11 +310,16 @@ def handle_submission(ack, body, view, client):
         )
         return
 
+    target_desc = (
+        f":satellite: Auto-target: *{target.device}* "
+        f"(srcintf `{target.src_route.interface}` -> "
+        f"dstintf `{target.dst_route.interface}`)"
+    )
     try:
         client.chat_postMessage(
             channel=channel,
             text=f"Firewall request: {policy['name']} (PR #{pr['number']})",
-            blocks=_approval_blocks(policy["name"], requester_id, pr),
+            blocks=_approval_blocks(policy["name"], requester_id, pr, target_desc),
         )
     except Exception as exc:  # Slack post failure (e.g. not_in_channel)
         log.error("chat_postMessage to %s failed:\n%s", channel, traceback.format_exc())

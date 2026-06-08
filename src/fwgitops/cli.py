@@ -18,6 +18,7 @@ from .config import FortiGateConfig
 from .fortigate import FortiGateClient
 from .loader import load_desired_state, load_rules
 from .planner import Plan, build_plan
+from .route_selector import load_devices, select_targets
 from .validator import validate as run_validate
 
 app = typer.Typer(add_completion=False, help="FortiGate GitOps automation.")
@@ -104,6 +105,104 @@ def apply(
         console.print(line)
         if line.startswith("[ERROR]"):
             sys.exit(1)
+
+
+@app.command()
+def routes() -> None:
+    """Show the routing table of each firewall in config/devices.yaml.
+
+    In dry-run mode these come from devices.yaml; with a live device they would
+    come from GET /api/v2/monitor/router/ipv4.
+    """
+    devices = load_devices()
+    if not devices:
+        console.print(
+            "[bold red]No devices found in config/devices.yaml.[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+    for dev in devices:
+        title = f"{dev.name}"
+        if dev.host:
+            title += f"  ({dev.host})"
+        table = Table(title=title)
+        table.add_column("Destination")
+        table.add_column("Interface")
+        table.add_column("Type")
+        table.add_column("Gateway")
+        for r in sorted(dev.routes, key=lambda x: x.prefixlen, reverse=True):
+            kind = (
+                "[cyan]connected[/cyan]"
+                if r.type == "connected"
+                else ("[dim]default[/dim]" if r.is_default else r.type)
+            )
+            table.add_row(r.dst, r.interface, kind, r.gateway or "-")
+        console.print(table)
+        console.print()
+
+
+@app.command()
+def select() -> None:
+    """Pick the target firewall for each policy from its routing path.
+
+    Uses config/devices.yaml. In dry-run mode the routing tables defined there
+    are used; otherwise the live device's route lookup would be queried.
+    """
+    state = load_desired_state()
+    devices = load_devices()
+    if not devices:
+        console.print(
+            "[bold red]No devices found in config/devices.yaml.[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+    addr_index = {a.name: a for a in state.addresses}
+
+    for policy in state.policies:
+        selection = select_targets(policy, addr_index, devices)
+        chosen = selection.chosen
+
+        table = Table(title=f"Policy '{policy.name}'  ({_endpoints(policy)})")
+        table.add_column("Firewall")
+        table.add_column("src route")
+        table.add_column("dst route")
+        table.add_column("Verdict")
+        for m in selection.matches:
+            picked = chosen is not None and m.device == chosen.device
+            verdict = (
+                "[bold green]TARGET[/bold green]"
+                if picked
+                else ("[yellow]transit[/yellow]" if m.is_transit else "[dim]skip[/dim]")
+            )
+            table.add_row(
+                m.device,
+                _route_cell(m.src_route),
+                _route_cell(m.dst_route),
+                f"{verdict}  [dim]{m.reason}[/dim]",
+            )
+        console.print(table)
+        if chosen is None:
+            console.print(
+                "  [bold red]No firewall is on the path for this policy.[/bold red]"
+            )
+        else:
+            ci = chosen.src_route.interface  # type: ignore[union-attr]
+            co = chosen.dst_route.interface  # type: ignore[union-attr]
+            console.print(
+                f"  -> target: [bold green]{chosen.device}[/bold green] "
+                f"(srcintf={ci}, dstintf={co})"
+            )
+        console.print()
+
+
+def _endpoints(policy) -> str:
+    return f"{','.join(policy.srcaddr)} -> {','.join(policy.dstaddr)}"
+
+
+def _route_cell(route) -> str:
+    if route is None:
+        return "[red]none[/red]"
+    return f"{route.dst} via {route.interface} ({route.type})"
 
 
 def main() -> None:
