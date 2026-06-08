@@ -186,3 +186,34 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [mgt-fw]
+- name: inet>exco-inet-fw
+  device: inet-fw
+  srcintf:
+  - inet-untrust
+  dstintf:
+  - inet-trust
+  srcaddr: &id007
+  - auto-10.54.10.1
+  dstaddr: &id008
+  - auto-10.53.10.1
+  service: &id009
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [inet-fw]
+- name: inet>exco-exco-fw
+  device: exco-fw
+  srcintf:
+  - exco-trust
+  dstintf:
+  - exco-untrust
+  srcaddr: *id007
+  dstaddr: *id008
+  service: *id009
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [exco-fw]
