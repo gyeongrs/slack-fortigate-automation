@@ -31,3 +31,8 @@ addresses:
     type: ipmask
     subnet: 172.16.8.20/32
     comment: "External partner host (behind exco-fw)"
+
+  - name: AWS_MGT_10.20.1.10/32
+    type: ipmask
+    subnet: 10.20.1.10/32
+    comment: AWS_MGT-Test"
