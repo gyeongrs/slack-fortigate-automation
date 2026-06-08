@@ -32,3 +32,19 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by keesd1024 (test)
+- name: dc1core>dc2core_0608
+  srcintf:
+  - core-trust
+  dstintf:
+  - core-untrust
+  srcaddr:
+  - AWS-10.52.10.1
+  dstaddr:
+  - Azure-10.56.10.1
+  service:
+  - TCP-552
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (Test)
