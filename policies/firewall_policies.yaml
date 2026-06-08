@@ -186,3 +186,48 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [mgt-fw]
+- name: exco>mgt-core-fw
+  device: core-fw
+  srcintf:
+  - core-untrust
+  dstintf:
+  - core-trust
+  srcaddr: &id007
+  - auto-10.53.20.10
+  dstaddr: &id008
+  - auto-10.52.30.15
+  service: &id009
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [core-fw]
+- name: exco>mgt-mgt-fw
+  device: mgt-fw
+  srcintf:
+  - mgt-untrust
+  dstintf:
+  - mgt-trust
+  srcaddr: *id007
+  dstaddr: *id008
+  service: *id009
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [mgt-fw]
+- name: exco>mgt-exco-fw
+  device: exco-fw
+  srcintf:
+  - exco-untrust
+  dstintf:
+  - exco-trust
+  srcaddr: *id007
+  dstaddr: *id008
+  service: *id009
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [exco-fw]
