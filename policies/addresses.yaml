@@ -11,3 +11,13 @@ addresses:
     type: ipmask
     subnet: 10.20.0.0/16
     comment: "Corporate client subnet"
+
+  - name: AWS-10.52.10.1
+    type: ipmask
+    subnet: 10.52.10.1/32
+    comment: "AWS Server"
+
+  - name: Azure-10.56.10.1
+    type: ipmask
+    subnet: 10.56.10.1/32
+    comment: "Azure Server"
