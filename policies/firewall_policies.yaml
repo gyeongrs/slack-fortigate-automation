@@ -231,3 +231,20 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [exco-fw]
+- name: mgt>core
+  device: mgt-fw
+  srcintf:
+  - mgt-trust
+  dstintf:
+  - mgt-untrust
+  srcaddr:
+  - AWS-10.52.10.1
+  dstaddr:
+  - auto-10.55.30.1
+  service:
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [mgt-fw]
