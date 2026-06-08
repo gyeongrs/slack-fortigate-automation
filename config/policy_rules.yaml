@@ -28,6 +28,10 @@ allowed_interfaces:
   - core-untrust
   - inet-trust
   - inet-untrust
+  - mgmt-trust
+  - mgmt-untrust
+  - exco-trust
+  - exco-untrust
 
 # Built-in FortiGate services that may be referenced in a policy without
 # being defined in services.yaml. Anything else must be a custom service

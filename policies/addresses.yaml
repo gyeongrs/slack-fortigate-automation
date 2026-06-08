@@ -21,3 +21,13 @@ addresses:
     type: ipmask
     subnet: 10.56.10.1/32
     comment: "Azure Server"
+
+  - name: mgmt-host
+    type: ipmask
+    subnet: 10.99.5.10/32
+    comment: "Management host (behind mgt-fw)"
+
+  - name: partner-host
+    type: ipmask
+    subnet: 172.16.8.20/32
+    comment: "External partner host (behind exco-fw)"
