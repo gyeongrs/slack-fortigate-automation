@@ -8,7 +8,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)  # .env wins over any stale shell/system env vars
 
 # Marker comment so the engine only ever touches objects it created.
 MANAGED_TAG = "managed-by:fwgitops"
@@ -31,6 +31,7 @@ class FortiGateConfig:
     api_token: str
     verify_tls: bool | str
     vdom: str | None
+    dry_run: bool = False
 
     @property
     def base_url(self) -> str:
@@ -38,16 +39,24 @@ class FortiGateConfig:
 
     @classmethod
     def from_env(cls) -> "FortiGateConfig":
+        dry_run = _env_bool("FORTIGATE_DRY_RUN", False)
         host = os.getenv("FORTIGATE_HOST", "").strip()
         token = os.getenv("FORTIGATE_API_TOKEN", "").strip()
-        if not host or not token:
+        if not dry_run and (not host or not token):
             raise RuntimeError(
                 "FORTIGATE_HOST and FORTIGATE_API_TOKEN must be set "
-                "(copy .env.example to .env)."
+                "(copy .env.example to .env), or set FORTIGATE_DRY_RUN=true "
+                "to test without a device."
             )
         ca_bundle = os.getenv("FORTIGATE_CA_BUNDLE", "").strip()
         verify: bool | str = _env_bool("FORTIGATE_VERIFY_TLS", True)
         if ca_bundle:
             verify = ca_bundle
         vdom = os.getenv("FORTIGATE_VDOM", "").strip() or None
-        return cls(host=host, api_token=token, verify_tls=verify, vdom=vdom)
+        return cls(
+            host=host or "dry-run.local",
+            api_token=token or "dry-run",
+            verify_tls=verify,
+            vdom=vdom,
+            dry_run=dry_run,
+        )

@@ -7,6 +7,15 @@ venv/
 *.egg-info/
 .pytest_cache/
 
+# Secrets / tokens (never commit)
+.env.*
+!.env.example
+git-hub-token
+*token*
+*secret*
+*.pem
+*.key
+
 # Editor / OS
 .vscode/
 .idea/

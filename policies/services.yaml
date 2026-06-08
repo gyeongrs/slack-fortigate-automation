@@ -5,3 +5,8 @@ services:
     protocol: TCP
     tcp_portrange: "8443"
     comment: "App custom HTTPS port"
+
+  - name: TCP-552
+    protocol: TCP
+    tcp_portrange: "552"
+    comment: "Custom TCP 552"

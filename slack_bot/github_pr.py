@@ -37,6 +37,14 @@ def _slug(text: str) -> str:
     return "".join(keep).strip("-")[:40] or "request"
 
 
+def fetch_repo_yaml(path: str) -> dict:
+    """Read and parse a YAML file from the base branch of the repo."""
+    cfg = GitHubConfig()
+    with httpx.Client(headers=cfg.headers, timeout=30) as client:
+        _, content = _get_file(client, cfg, path, cfg.base)
+    return yaml.safe_load(content) or {}
+
+
 def open_policy_pr(policy: dict, requester: str, justification: str) -> dict:
     """Append `policy` to firewall_policies.yaml on a new branch and open a PR.
 

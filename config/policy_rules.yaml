@@ -24,7 +24,12 @@ allowed_interfaces:
   - lan
   - wan1
   - dmz
-
+  - core-trust
+  - core-untrust
+  - core-trust
+  - core-untrust
+  - inet-trust
+  - inet-untrust
 # Built-in FortiGate services that may be referenced in a policy without
 # being defined in services.yaml. Anything else must be a custom service
 # defined in services.yaml (referential-integrity check), otherwise the
@@ -46,6 +51,11 @@ allowed_builtin_services:
   - LDAP
   - SYSLOG
   - SNMP
+  - AWS
+  - Azure
+  - PING
+  - DNS
+ 
 
 # Every automated policy must set these.
 require:

@@ -27,9 +27,9 @@ jobs:
       - name: Validate guardrails (offline)
         run: fwctl validate
 
-      - name: Plan (dry-run, online)
-        if: ${{ env.FORTIGATE_HOST != '' }}
+      - name: Plan (device or dry-run)
         env:
+          FORTIGATE_DRY_RUN: ${{ vars.FORTIGATE_DRY_RUN }}
           FORTIGATE_HOST: ${{ secrets.FORTIGATE_HOST }}
           FORTIGATE_API_TOKEN: ${{ secrets.FORTIGATE_API_TOKEN }}
           FORTIGATE_VERIFY_TLS: ${{ secrets.FORTIGATE_VERIFY_TLS }}

@@ -21,16 +21,34 @@ Slack app config:
 from __future__ import annotations
 
 import json
+import logging
 import os
+import traceback
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from slack_bolt import App
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 
-from .github_pr import close_pr, merge_pr, open_policy_pr
+from fwgitops.models import Address, DesiredState, Policy, Service
+from fwgitops.validator import validate as run_validate
+
+from .github_pr import close_pr, fetch_repo_yaml, merge_pr, open_policy_pr
+
+load_dotenv(override=True)  # .env wins over any stale shell/system env vars
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("fw-bot")
+
+_bot_token = os.environ.get("SLACK_BOT_TOKEN")
+if not _bot_token:
+    raise SystemExit(
+        "SLACK_BOT_TOKEN is not set. Copy .env.example to .env and fill in "
+        "SLACK_BOT_TOKEN (xoxb-...), SLACK_APP_TOKEN (xapp-...), and "
+        "SLACK_SIGNING_SECRET before running the bot."
+    )
 
 app = App(
-    token=os.environ.get("SLACK_BOT_TOKEN"),
+    token=_bot_token,
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
 )
 handler = SlackRequestHandler(app)
@@ -127,8 +145,28 @@ def open_request_modal(ack, body, client):
     client.views_open(trigger_id=body["trigger_id"], view=_modal())
 
 
+def _allow_self_approve() -> bool:
+    return os.getenv("ALLOW_SELF_APPROVE", "false").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
 def _split(value: str) -> list[str]:
     return [v.strip() for v in value.replace(",", " ").split() if v.strip()]
+
+
+def _validate_request(policy: dict) -> list[str]:
+    """Run the same guardrails as CI against the repo's current definitions
+    plus the requested policy. Returns a list of violations (empty == ok)."""
+    addrs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
+    svcs = fetch_repo_yaml("policies/services.yaml").get("services", [])
+    rules = fetch_repo_yaml("config/policy_rules.yaml")
+    state = DesiredState(
+        addresses=[Address(**a) for a in addrs],
+        services=[Service(**s) for s in svcs],
+        policies=[Policy(**policy)],
+    )
+    return run_validate(state, rules)
 
 
 @app.view("fw_request_submit")
@@ -158,17 +196,57 @@ def handle_submission(ack, body, view, client):
     }
 
     channel = os.getenv("SLACK_NOTIFY_CHANNEL", requester_id)
+
+    # Validate BEFORE opening a PR, using the same guardrails as CI, so bad
+    # requests (e.g. referencing undefined address objects) are rejected up
+    # front instead of failing later in the apply workflow.
+    try:
+        errors = _validate_request(policy)
+    except Exception as exc:
+        log.error("request validation lookup failed:\n%s", traceback.format_exc())
+        errors = []  # fail open to PR; CI will still catch issues
+        client.chat_postMessage(
+            channel=requester_id,
+            text=f":warning: Could not pre-validate (CI will still check): `{exc}`",
+        )
+    if errors:
+        log.info("Rejected request %s: %s", policy["name"], errors)
+        bullet = "\n".join(f"• {e}" for e in errors)
+        client.chat_postMessage(
+            channel=requester_id,
+            text=(
+                f":no_entry: Request *{policy['name']}* rejected (no PR created):\n"
+                f"{bullet}\n\n_Tip: address objects must already exist in "
+                "`policies/addresses.yaml`._"
+            ),
+        )
+        return
+
     try:
         pr = open_policy_pr(policy, requester, justification)
+        log.info("Opened PR #%s for policy %s", pr["number"], policy["name"])
+    except Exception as exc:  # GitHub failure (repo/token/branch) — tell requester
+        log.error("open_policy_pr failed:\n%s", traceback.format_exc())
+        client.chat_postMessage(
+            channel=requester_id,
+            text=f":x: Could not open PR: `{exc}`",
+        )
+        return
+
+    try:
         client.chat_postMessage(
             channel=channel,
             text=f"Firewall request: {policy['name']} (PR #{pr['number']})",
             blocks=_approval_blocks(policy["name"], requester_id, pr),
         )
-    except Exception as exc:  # surface failures back to the requester
+    except Exception as exc:  # Slack post failure (e.g. not_in_channel)
+        log.error("chat_postMessage to %s failed:\n%s", channel, traceback.format_exc())
         client.chat_postMessage(
             channel=requester_id,
-            text=f":x: Could not open PR: `{exc}`",
+            text=(
+                f":warning: PR #{pr['number']} was created, but I couldn't post "
+                f"to `{channel}`: `{exc}`. Is the bot invited to that channel?"
+            ),
         )
 
 
@@ -191,11 +269,16 @@ def handle_approve(ack, body, client):
     ctx = json.loads(body["actions"][0]["value"])
     approver_id = body["user"]["id"]
 
-    if approver_id == ctx["requester"]:
+    # By default the requester cannot approve their own request. Set
+    # ALLOW_SELF_APPROVE=true (testing / single-operator setups) to permit it.
+    if approver_id == ctx["requester"] and not _allow_self_approve():
         client.chat_postEphemeral(
             channel=body["channel"]["id"],
             user=approver_id,
-            text=":no_entry: You cannot approve your own request.",
+            text=(
+                ":no_entry: You cannot approve your own request. "
+                "(Set ALLOW_SELF_APPROVE=true to allow self-approval.)"
+            ),
         )
         return
 

@@ -38,6 +38,11 @@ class FortiGateClient:
         return params
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict:
+        if self._cfg.dry_run:
+            # No device available: reads return empty, writes are simulated.
+            if method == "GET":
+                return {"results": []}
+            return {"dry_run": True}
         url = f"{self._cfg.base_url}/{path.lstrip('/')}"
         try:
             resp = self._session.request(
