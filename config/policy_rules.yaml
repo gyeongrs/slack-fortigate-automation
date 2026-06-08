@@ -30,6 +30,8 @@ allowed_interfaces:
   - inet-untrust
   - mgmt-trust
   - mgmt-untrust
+  - mgt-trust
+  - mgt-untrust
   - exco-trust
   - exco-untrust
 
