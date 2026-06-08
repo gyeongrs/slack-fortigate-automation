@@ -96,3 +96,48 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (Test)
+- name: inet>mgt-core-fw
+  device: core-fw
+  srcintf:
+  - core-untrust
+  dstintf:
+  - core-trust
+  srcaddr: &id001
+  - AWS-10.52.10.1
+  dstaddr: &id002
+  - mgmt-host
+  service: &id003
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (Test) [core-fw]
+- name: inet>mgt-mgt-fw
+  device: mgt-fw
+  srcintf:
+  - mgmt-untrust
+  dstintf:
+  - mgmt-trust
+  srcaddr: *id001
+  dstaddr: *id002
+  service: *id003
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (Test) [mgt-fw]
+- name: inet>mgt-inet-fw
+  device: inet-fw
+  srcintf:
+  - inet-untrust
+  dstintf:
+  - inet-trust
+  srcaddr: *id001
+  dstaddr: *id002
+  service: *id003
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (Test) [inet-fw]
