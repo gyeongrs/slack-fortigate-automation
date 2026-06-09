@@ -248,3 +248,20 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [mgt-fw]
+- name: test1
+  device: ch-fw
+  srcintf:
+  - ch-trust
+  dstintf:
+  - ch-untrust
+  srcaddr:
+  - auto-10.51.20.1
+  dstaddr:
+  - auto-10.56.1.1
+  service:
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [ch-fw]
