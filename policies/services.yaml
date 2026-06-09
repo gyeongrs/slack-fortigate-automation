@@ -1,5 +1,6 @@
-# Custom services (built-in services like HTTPS/HTTP/DNS can be referenced
-# by name directly in firewall_policies.yaml without defining them here).
+# Global custom service catalog — pushed to EVERY firewall in config/devices.yaml.
+# Built-in services (HTTPS, HTTP, SSH, …) are whitelisted in policy_rules.yaml
+# and do not need to be defined here.
 services:
   - name: app-https-8443
     protocol: TCP

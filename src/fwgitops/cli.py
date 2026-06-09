@@ -13,11 +13,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .applier import apply_plan
-from .config import FortiGateConfig
-from .fortigate import FortiGateClient
-from .loader import load_desired_state, load_rules
-from .planner import Plan, build_plan
+from .loader import load_desired_state, load_rules, load_shared_services
+from .multi_device import apply_all_devices, combined_plan
+from .planner import Plan
 from .route_selector import load_devices, select_targets
 from .validator import validate as run_validate
 
@@ -43,8 +41,8 @@ def validate() -> None:
     _validate_or_exit()
 
 
-def _render_plan(plan: Plan) -> None:
-    table = Table(title="FortiGate change plan")
+def _render_plan(plan: Plan, title: str = "FortiGate change plan") -> None:
+    table = Table(title=title)
     table.add_column("Action")
     table.add_column("Kind")
     table.add_column("Name")
@@ -61,11 +59,19 @@ def _render_plan(plan: Plan) -> None:
 
 @app.command()
 def plan() -> None:
-    """Show the create/update plan against the live device (no changes made)."""
+    """Show the create/update plan against inventory device(s) (no changes made)."""
     _validate_or_exit()
     state = load_desired_state()
-    client = FortiGateClient(FortiGateConfig.from_env())
-    _render_plan(build_plan(state, client))
+    plans, devices = combined_plan(state)
+    if devices:
+        console.print(
+            f"[bold]Shared services ({len(state.services)}) apply to all "
+            f"{len(devices)} firewall(s).[/bold]"
+        )
+        for dev, plan_obj in zip(devices, plans):
+            _render_plan(plan_obj, title=f"Plan: {dev.name}")
+    else:
+        _render_plan(plans[0])
 
 
 @app.command()
@@ -74,36 +80,48 @@ def apply(
         False, "--yes", "-y", help="Skip the interactive confirmation."
     ),
 ) -> None:
-    """Apply the plan to the live device after guardrails + tripwire pass."""
+    """Apply shared services + per-device policies to every inventory firewall."""
     _validate_or_exit()
     state = load_desired_state()
     rules = load_rules()
-    client = FortiGateClient(FortiGateConfig.from_env())
-    plan_obj = build_plan(state, client)
-    _render_plan(plan_obj)
+    plans, devices = combined_plan(state)
 
-    changed = plan_obj.changed
-    if not changed:
+    total_changed = sum(len(p.changed) for p in plans)
+    if devices:
+        console.print(
+            f"[bold]Shared services ({len(state.services)}) → all "
+            f"{len(devices)} firewall(s)[/bold]"
+        )
+        for dev, plan_obj in zip(devices, plans):
+            if plan_obj.changed:
+                _render_plan(plan_obj, title=f"Plan: {dev.name}")
+    elif plans[0].changed:
+        _render_plan(plans[0])
+
+    if total_changed == 0:
         console.print("Nothing to apply.")
         return
 
     tripwire = rules.get("max_changes_per_apply", 10)
-    if len(changed) > tripwire:
-        console.print(
-            f"[bold red]Refusing to apply {len(changed)} changes "
-            f"(max_changes_per_apply={tripwire}).[/bold red]"
-        )
-        raise typer.Exit(code=2)
+    for dev, plan_obj in zip(devices or [None], plans):
+        n = len(plan_obj.changed)
+        if n > tripwire:
+            label = dev.name if dev else "default"
+            console.print(
+                f"[bold red]Refusing to apply {n} changes on {label} "
+                f"(max_changes_per_apply={tripwire}).[/bold red]"
+            )
+            raise typer.Exit(code=2)
 
     if not yes:
-        confirm = typer.confirm(f"Apply {len(changed)} change(s)?")
+        confirm = typer.confirm(f"Apply {total_changed} change(s)?")
         if not confirm:
             console.print("Aborted.")
             raise typer.Exit(code=0)
 
-    for line in apply_plan(plan_obj, client):
+    for line in apply_all_devices(state):
         console.print(line)
-        if line.startswith("[ERROR]"):
+        if "[ERROR]" in line:
             sys.exit(1)
 
 

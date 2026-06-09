@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from .config import POLICIES_DIR, RULES_FILE
+from .config import POLICIES_DIR, RULES_FILE, SHARED_SERVICES_FILE
 from .models import Address, DesiredState, Policy, Service
 
 
@@ -20,7 +20,7 @@ def _read_yaml(path: Path) -> dict:
 def load_desired_state(policies_dir: Path | None = None) -> DesiredState:
     base = policies_dir or POLICIES_DIR
     addresses = _read_yaml(base / "addresses.yaml").get("addresses", [])
-    services = _read_yaml(base / "services.yaml").get("services", [])
+    services = load_shared_services(base)
     policies = _read_yaml(base / "firewall_policies.yaml").get("policies", [])
 
     return DesiredState(
@@ -28,6 +28,15 @@ def load_desired_state(policies_dir: Path | None = None) -> DesiredState:
         services=[Service(**s) for s in services],
         policies=[Policy(**p) for p in policies],
     )
+
+
+def load_shared_services(policies_dir: Path | None = None) -> list[dict]:
+    """Return the global service catalog (same objects on every firewall)."""
+    base = policies_dir or POLICIES_DIR
+    path = base / "services.yaml"
+    if not path.exists() and SHARED_SERVICES_FILE.exists():
+        path = SHARED_SERVICES_FILE
+    return _read_yaml(path).get("services", [])
 
 
 def load_rules(rules_file: Path | None = None) -> dict:

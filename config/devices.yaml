@@ -15,18 +15,18 @@ devices:
     vdom: root
     token_env: FORTIGATE_API_TOKEN_CORE
     routes:
-      - {dst: 10.55.10.0/24, interface: core-trust, type: static}
-      - {dst: 10.55.20.0/24, interface: core-trust, type: static}
-      - {dst: 10.55.30.0/24, interface: core-trust, type: static}
-      - {dst: 10.55.40.0/24, interface: core-trust, type: static}
-      - {dst: 10.55.50.0/24, interface: core-trust, type: static}
-      - {dst: 10.55.60.0/24, interface: core-trust, type: static}
-      - {dst: 10.52.10.0/24, interface: core-trust, type: static}
-      - {dst: 10.52.20.0/24, interface: core-trust, type: static}
-      - {dst: 10.52.30.0/24, interface: core-trust, type: static}
-      - {dst: 10.52.40.0/24, interface: core-trust, type: static}
-      - {dst: 10.52.50.0/24, interface: core-trust, type: static}
-      - {dst: 10.52.60.0/24, interface: core-trust, type: static}
+      - {dst: 10.55.10.0/24, interface: core-trust, type: connected}
+      - {dst: 10.55.20.0/24, interface: core-trust, type: connected}
+      - {dst: 10.55.30.0/24, interface: core-trust, type: connected}
+      - {dst: 10.55.40.0/24, interface: core-trust, type: connected}
+      - {dst: 10.55.50.0/24, interface: core-trust, type: connected}
+      - {dst: 10.55.60.0/24, interface: core-trust, type: connected}
+      - {dst: 10.52.10.0/24, interface: core-trust, type: connected}
+      - {dst: 10.52.20.0/24, interface: core-trust, type: connected}
+      - {dst: 10.52.30.0/24, interface: core-trust, type: connected}
+      - {dst: 10.52.40.0/24, interface: core-trust, type: connected}
+      - {dst: 10.52.50.0/24, interface: core-trust, type: connected}
+      - {dst: 10.52.60.0/24, interface: core-trust, type: connected}
       - {dst: 10.54.10.0/24, interface: core-untrust, type: static}
       - {dst: 10.54.20.0/24, interface: core-untrust, type: static}
       - {dst: 10.54.30.0/24, interface: core-untrust, type: static}
@@ -93,12 +93,12 @@ devices:
       - {dst: 10.57.0.0/16, interface: mgt-untrust, type: static}
       - {dst: 10.1.0.0/16, interface: mgt-untrust, type: static}
       - {dst: 10.58.0.0/16, interface: mgt-untrust, type: static}
-      - {dst: 10.52.10.0/24, interface: mgt-trust, type: static}
-      - {dst: 10.52.20.0/24, interface: mgt-trust, type: static}
-      - {dst: 10.52.30.0/24, interface: mgt-trust, type: static}
-      - {dst: 10.52.40.0/24, interface: mgt-trust, type: static}
-      - {dst: 10.52.50.0/24, interface: mgt-trust, type: static}
-      - {dst: 10.52.60.0/24, interface: mgt-trust, type: static}
+      - {dst: 10.52.10.0/24, interface: mgt-trust, type: connected}
+      - {dst: 10.52.20.0/24, interface: mgt-trust, type: connected}
+      - {dst: 10.52.30.0/24, interface: mgt-trust, type: connected}
+      - {dst: 10.52.40.0/24, interface: mgt-trust, type: connected}
+      - {dst: 10.52.50.0/24, interface: mgt-trust, type: connected}
+      - {dst: 10.52.60.0/24, interface: mgt-trust, type: connected}
 
   - name: exco-fw
     host: 10.0.0.4
