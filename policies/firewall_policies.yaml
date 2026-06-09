@@ -248,3 +248,34 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [mgt-fw]
+- name: test-ch-fw
+  device: ch-fw
+  srcintf:
+  - ch-trust
+  dstintf:
+  - ch-untrust
+  srcaddr: &id010
+  - auto-10.51.10.1
+  dstaddr: &id011
+  - auto-10.57.10.2
+  service: &id012
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [ch-fw]
+- name: test-vdi-fw
+  device: vdi-fw
+  srcintf:
+  - vdi-untrust
+  dstintf:
+  - vdi-trust
+  srcaddr: *id010
+  dstaddr: *id011
+  service: *id012
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [vdi-fw]
