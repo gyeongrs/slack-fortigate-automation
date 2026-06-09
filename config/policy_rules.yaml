@@ -34,6 +34,16 @@ allowed_interfaces:
   - mgt-untrust
   - exco-trust
   - exco-untrust
+  - ch-trust
+  - ch-untrust
+  - svr-trust
+  - svr-untrust
+  - vdi-trust
+  - vdi-untrust
+  - dmz-trust
+  - dmz-untrust
+  - cc-trust
+  - cc-untrust
 
 # Built-in FortiGate services that may be referenced in a policy without
 # being defined in services.yaml. Anything else must be a custom service

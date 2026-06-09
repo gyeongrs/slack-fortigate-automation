@@ -39,6 +39,26 @@ devices:
       - {dst: 10.53.40.0/24, interface: core-untrust, type: static}
       - {dst: 10.53.50.0/24, interface: core-untrust, type: static}
       - {dst: 10.53.60.0/24, interface: core-untrust, type: static}
+      - {dst: 10.51.10.0/24, interface: core-untrust, type: static}
+      - {dst: 10.51.20.0/24, interface: core-untrust, type: static}
+      - {dst: 10.51.30.0/24, interface: core-untrust, type: static}
+      - {dst: 10.51.40.0/24, interface: core-untrust, type: static}
+      - {dst: 10.56.10.0/24, interface: core-untrust, type: static}
+      - {dst: 10.56.20.0/24, interface: core-untrust, type: static}
+      - {dst: 10.56.30.0/24, interface: core-untrust, type: static}
+      - {dst: 10.56.40.0/24, interface: core-untrust, type: static}
+      - {dst: 10.57.10.0/24, interface: core-untrust, type: static}
+      - {dst: 10.57.20.0/24, interface: core-untrust, type: static}
+      - {dst: 10.57.30.0/24, interface: core-untrust, type: static}
+      - {dst: 10.57.40.0/24, interface: core-untrust, type: static}
+      - {dst: 10.1.10.0/24, interface: core-untrust, type: static}
+      - {dst: 10.1.20.0/24, interface: core-untrust, type: static}
+      - {dst: 10.1.30.0/24, interface: core-untrust, type: static}
+      - {dst: 10.1.40.0/24, interface: core-untrust, type: static}
+      - {dst: 10.58.10.0/24, interface: core-untrust, type: static}
+      - {dst: 10.58.20.0/24, interface: core-untrust, type: static}
+      - {dst: 10.58.30.0/24, interface: core-untrust, type: static}
+      - {dst: 10.58.40.0/24, interface: core-untrust, type: static}
 
   - name: inet-fw
     host: 10.0.0.2
@@ -48,6 +68,11 @@ devices:
       - {dst: 10.52.0.0/16, interface: inet-trust, type: static}
       - {dst: 10.53.0.0/16, interface: inet-trust, type: static}
       - {dst: 10.55.0.0/16, interface: inet-trust, type: static}
+      - {dst: 10.51.0.0/16, interface: inet-trust, type: static}
+      - {dst: 10.56.0.0/16, interface: inet-trust, type: static}
+      - {dst: 10.57.0.0/16, interface: inet-trust, type: static}
+      - {dst: 10.1.0.0/16, interface: inet-trust, type: static}
+      - {dst: 10.58.0.0/16, interface: inet-trust, type: static}
       - {dst: 10.54.10.0/24, interface: inet-untrust, type: static}
       - {dst: 10.54.20.0/24, interface: inet-untrust, type: static}
       - {dst: 10.54.30.0/24, interface: inet-untrust, type: static}
@@ -63,6 +88,11 @@ devices:
       - {dst: 10.54.0.0/16, interface: mgt-untrust, type: static}
       - {dst: 10.53.0.0/16, interface: mgt-untrust, type: static}
       - {dst: 10.55.0.0/16, interface: mgt-untrust, type: static}
+      - {dst: 10.51.0.0/16, interface: mgt-untrust, type: static}
+      - {dst: 10.56.0.0/16, interface: mgt-untrust, type: static}
+      - {dst: 10.57.0.0/16, interface: mgt-untrust, type: static}
+      - {dst: 10.1.0.0/16, interface: mgt-untrust, type: static}
+      - {dst: 10.58.0.0/16, interface: mgt-untrust, type: static}
       - {dst: 10.52.10.0/24, interface: mgt-trust, type: static}
       - {dst: 10.52.20.0/24, interface: mgt-trust, type: static}
       - {dst: 10.52.30.0/24, interface: mgt-trust, type: static}
@@ -78,9 +108,104 @@ devices:
       - {dst: 10.52.0.0/16, interface: exco-trust, type: static}
       - {dst: 10.54.0.0/16, interface: exco-trust, type: static}
       - {dst: 10.55.0.0/16, interface: exco-trust, type: static}
+      - {dst: 10.51.0.0/16, interface: exco-trust, type: static}
+      - {dst: 10.56.0.0/16, interface: exco-trust, type: static}
+      - {dst: 10.57.0.0/16, interface: exco-trust, type: static}
+      - {dst: 10.1.0.0/16, interface: exco-trust, type: static}
+      - {dst: 10.58.0.0/16, interface: exco-trust, type: static}
       - {dst: 10.53.10.0/24, interface: exco-untrust, type: static}
       - {dst: 10.53.20.0/24, interface: exco-untrust, type: static}
       - {dst: 10.53.30.0/24, interface: exco-untrust, type: static}
       - {dst: 10.53.40.0/24, interface: exco-untrust, type: static}
       - {dst: 10.53.50.0/24, interface: exco-untrust, type: static}
       - {dst: 10.53.60.0/24, interface: exco-untrust, type: static}
+
+  - name: ch-fw
+    host: 10.0.0.5
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_CH
+    routes:
+      - {dst: 10.51.10.0/24, interface: ch-trust, type: connected}
+      - {dst: 10.51.20.0/24, interface: ch-trust, type: connected}
+      - {dst: 10.51.30.0/24, interface: ch-trust, type: connected}
+      - {dst: 10.51.40.0/24, interface: ch-trust, type: connected}
+      - {dst: 10.52.0.0/16, interface: ch-untrust, type: static}
+      - {dst: 10.53.0.0/16, interface: ch-untrust, type: static}
+      - {dst: 10.54.0.0/16, interface: ch-untrust, type: static}
+      - {dst: 10.55.0.0/16, interface: ch-untrust, type: static}
+      - {dst: 10.56.0.0/16, interface: ch-untrust, type: static}
+      - {dst: 10.57.0.0/16, interface: ch-untrust, type: static}
+      - {dst: 10.1.0.0/16, interface: ch-untrust, type: static}
+      - {dst: 10.58.0.0/16, interface: ch-untrust, type: static}
+
+  - name: svr-fw
+    host: 10.0.0.6
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_SVR
+    routes:
+      - {dst: 10.56.10.0/24, interface: svr-trust, type: connected}
+      - {dst: 10.56.20.0/24, interface: svr-trust, type: connected}
+      - {dst: 10.56.30.0/24, interface: svr-trust, type: connected}
+      - {dst: 10.56.40.0/24, interface: svr-trust, type: connected}
+      - {dst: 10.51.0.0/16, interface: svr-untrust, type: static}
+      - {dst: 10.52.0.0/16, interface: svr-untrust, type: static}
+      - {dst: 10.53.0.0/16, interface: svr-untrust, type: static}
+      - {dst: 10.54.0.0/16, interface: svr-untrust, type: static}
+      - {dst: 10.55.0.0/16, interface: svr-untrust, type: static}
+      - {dst: 10.57.0.0/16, interface: svr-untrust, type: static}
+      - {dst: 10.1.0.0/16, interface: svr-untrust, type: static}
+      - {dst: 10.58.0.0/16, interface: svr-untrust, type: static}
+
+  - name: vdi-fw
+    host: 10.0.0.7
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_VDI
+    routes:
+      - {dst: 10.57.10.0/24, interface: vdi-trust, type: connected}
+      - {dst: 10.57.20.0/24, interface: vdi-trust, type: connected}
+      - {dst: 10.57.30.0/24, interface: vdi-trust, type: connected}
+      - {dst: 10.57.40.0/24, interface: vdi-trust, type: connected}
+      - {dst: 10.51.0.0/16, interface: vdi-untrust, type: static}
+      - {dst: 10.52.0.0/16, interface: vdi-untrust, type: static}
+      - {dst: 10.53.0.0/16, interface: vdi-untrust, type: static}
+      - {dst: 10.54.0.0/16, interface: vdi-untrust, type: static}
+      - {dst: 10.55.0.0/16, interface: vdi-untrust, type: static}
+      - {dst: 10.56.0.0/16, interface: vdi-untrust, type: static}
+      - {dst: 10.1.0.0/16, interface: vdi-untrust, type: static}
+      - {dst: 10.58.0.0/16, interface: vdi-untrust, type: static}
+
+  - name: dmz-fw
+    host: 10.0.0.8
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_DMZ
+    routes:
+      - {dst: 10.1.10.0/24, interface: dmz-trust, type: connected}
+      - {dst: 10.1.20.0/24, interface: dmz-trust, type: connected}
+      - {dst: 10.1.30.0/24, interface: dmz-trust, type: connected}
+      - {dst: 10.1.40.0/24, interface: dmz-trust, type: connected}
+      - {dst: 10.51.0.0/16, interface: dmz-untrust, type: static}
+      - {dst: 10.52.0.0/16, interface: dmz-untrust, type: static}
+      - {dst: 10.53.0.0/16, interface: dmz-untrust, type: static}
+      - {dst: 10.54.0.0/16, interface: dmz-untrust, type: static}
+      - {dst: 10.55.0.0/16, interface: dmz-untrust, type: static}
+      - {dst: 10.56.0.0/16, interface: dmz-untrust, type: static}
+      - {dst: 10.57.0.0/16, interface: dmz-untrust, type: static}
+      - {dst: 10.58.0.0/16, interface: dmz-untrust, type: static}
+
+  - name: cc-fw
+    host: 10.0.0.9
+    vdom: root
+    token_env: FORTIGATE_API_TOKEN_CC
+    routes:
+      - {dst: 10.58.10.0/24, interface: cc-trust, type: connected}
+      - {dst: 10.58.20.0/24, interface: cc-trust, type: connected}
+      - {dst: 10.58.30.0/24, interface: cc-trust, type: connected}
+      - {dst: 10.58.40.0/24, interface: cc-trust, type: connected}
+      - {dst: 10.51.0.0/16, interface: cc-untrust, type: static}
+      - {dst: 10.52.0.0/16, interface: cc-untrust, type: static}
+      - {dst: 10.53.0.0/16, interface: cc-untrust, type: static}
+      - {dst: 10.54.0.0/16, interface: cc-untrust, type: static}
+      - {dst: 10.55.0.0/16, interface: cc-untrust, type: static}
+      - {dst: 10.56.0.0/16, interface: cc-untrust, type: static}
+      - {dst: 10.57.0.0/16, interface: cc-untrust, type: static}
+      - {dst: 10.1.0.0/16, interface: cc-untrust, type: static}

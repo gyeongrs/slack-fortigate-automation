@@ -144,3 +144,24 @@ def test_same_interface_is_not_transit():
     sel = select_targets(pol, idx, [dev])
     assert sel.chosen is None
     assert sel.matches[0].is_transit is False
+
+
+def test_ch_to_svr_transits_zone_firewalls():
+    """10.51.10.1 -> 10.56.10.1 must transit ch-fw and svr-fw (full inventory)."""
+    from fwgitops.route_selector import load_devices
+
+    idx = {
+        "ch-host": _addr("ch-host", "10.51.10.1/32"),
+        "svr-host": _addr("svr-host", "10.56.10.1/32"),
+    }
+    pol = _policy("p", "ch-host", "svr-host")
+    sel = select_targets(pol, idx, load_devices())
+    devices = {m.device for m in sel.transit}
+    assert "ch-fw" in devices
+    assert "svr-fw" in devices
+    ch = next(m for m in sel.transit if m.device == "ch-fw")
+    assert ch.src_route.interface == "ch-trust"
+    assert ch.dst_route.interface == "ch-untrust"
+    svr = next(m for m in sel.transit if m.device == "svr-fw")
+    assert svr.src_route.interface == "svr-untrust"
+    assert svr.dst_route.interface == "svr-trust"
