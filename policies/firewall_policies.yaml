@@ -248,3 +248,34 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [mgt-fw]
+- name: teset-svr-fw
+  device: svr-fw
+  srcintf:
+  - svr-untrust
+  dstintf:
+  - svr-trust
+  srcaddr: &id010
+  - auto-10.57.10.1
+  dstaddr: &id011
+  - Azure-10.56.10.1
+  service: &id012
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [svr-fw]
+- name: teset-vdi-fw
+  device: vdi-fw
+  srcintf:
+  - vdi-trust
+  dstintf:
+  - vdi-untrust
+  srcaddr: *id010
+  dstaddr: *id011
+  service: *id012
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [vdi-fw]
