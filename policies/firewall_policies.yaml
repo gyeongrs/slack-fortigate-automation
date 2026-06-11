@@ -248,3 +248,34 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [mgt-fw]
+- name: teset-inet-fw
+  device: inet-fw
+  srcintf:
+  - inet-trust
+  dstintf:
+  - inet-untrust
+  srcaddr: &id010
+  - auto-10.53.10.1
+  dstaddr: &id011
+  - auto-10.54.10.1
+  service: &id012
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [inet-fw]
+- name: teset-exco-fw
+  device: exco-fw
+  srcintf:
+  - exco-untrust
+  dstintf:
+  - exco-trust
+  srcaddr: *id010
+  dstaddr: *id011
+  service: *id012
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  comment: Requested by gyeongrs (test) [exco-fw]
