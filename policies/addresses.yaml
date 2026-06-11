@@ -47,3 +47,7 @@ addresses:
   type: ipmask
   subnet: 10.55.30.1/32
   comment: Auto-created from Slack request by gyeongrs
+- name: auto-10.53.10.1
+  type: ipmask
+  subnet: 10.53.10.1/32
+  comment: Auto-created from Slack request by gyeongrs
