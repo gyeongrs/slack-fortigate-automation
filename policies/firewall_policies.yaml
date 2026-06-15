@@ -279,3 +279,40 @@ policies:
   logtraffic: all
   status: enable
   comment: Requested by gyeongrs (test) [vdi-fw]
+- name: dc1>dc2-svr-fw
+  device: svr-fw
+  srcintf:
+  - svr-trust
+  dstintf:
+  - svr-untrust
+  srcaddr: &id013
+  - Azure-10.56.10.1
+  dstaddr: &id014
+  - auto-10.57.10.1
+  service: &id015
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-22'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [svr-fw]
+- name: dc1>dc2-vdi-fw
+  device: vdi-fw
+  srcintf:
+  - vdi-untrust
+  dstintf:
+  - vdi-trust
+  srcaddr: *id013
+  dstaddr: *id014
+  service: *id015
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-22'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [vdi-fw]
