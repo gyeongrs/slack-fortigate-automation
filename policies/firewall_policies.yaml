@@ -316,3 +316,23 @@ policies:
   requester: gyeongrs
   requester_slack_id: U0B85045KGD
   comment: Requested by gyeongrs (test) [vdi-fw]
+- name: DC1>DC2
+  device: vdi-fw
+  srcintf:
+  - vdi-untrust
+  dstintf:
+  - vdi-trust
+  srcaddr:
+  - auto-10.56.1.1
+  dstaddr:
+  - auto-10.57.10.1
+  service:
+  - auto-tcp-800
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-16'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [vdi-fw]
