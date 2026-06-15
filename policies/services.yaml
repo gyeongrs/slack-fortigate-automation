@@ -1,13 +1,13 @@
-# Global custom service catalog — pushed to EVERY firewall in config/devices.yaml.
-# Built-in services (HTTPS, HTTP, SSH, …) are whitelisted in policy_rules.yaml
-# and do not need to be defined here.
 services:
-  - name: app-https-8443
-    protocol: TCP
-    tcp_portrange: "8443"
-    comment: "App custom HTTPS port"
-
-  - name: TCP-552
-    protocol: TCP
-    tcp_portrange: "552"
-    comment: "Custom TCP 552"
+- name: app-https-8443
+  protocol: TCP
+  tcp_portrange: '8443'
+  comment: App custom HTTPS port
+- name: TCP-552
+  protocol: TCP
+  tcp_portrange: '552'
+  comment: Custom TCP 552
+- name: auto-tcp-800
+  protocol: TCP
+  comment: Auto-created from Slack request by gyeongrs
+  tcp_portrange: '800'
