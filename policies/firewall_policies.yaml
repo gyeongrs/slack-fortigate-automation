@@ -138,3 +138,40 @@ policies:
   requester: gyeongrs
   requester_slack_id: U0B85045KGD
   comment: Requested by gyeongrs (ファイ春) [dc1-vdi-fw]
+- name: dc1inet-10.54.10.10>dc1cc-10.58.10.
+  device: dc1-inet-fw
+  srcintf:
+  - inet-untrust
+  dstintf:
+  - inet-trust
+  srcaddr: &id007
+  - auto-10.54.10.10
+  dstaddr: &id008
+  - 10.58.10.10
+  service: &id009
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [dc1-inet-fw]
+- name: dc1inet-10.54.10.10>dc1cc-10.58.10.
+  device: dc1-cc-fw
+  srcintf:
+  - cc-untrust
+  dstintf:
+  - cc-trust
+  srcaddr: *id007
+  dstaddr: *id008
+  service: *id009
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [dc1-cc-fw]
