@@ -85,3 +85,17 @@ addresses:
   zone: svr
   comment: test
   expires_at: '2026-06-17'
+- name: auto-10.54.10.10
+  type: ipmask
+  subnet: 10.54.10.10/32
+  center: dc1
+  zone: inet
+  comment: test
+  expires_at: '2026-06-17'
+- name: 10.58.10.10
+  type: ipmask
+  subnet: 10.58.10.10/32
+  center: dc1
+  zone: cc
+  comment: test
+  expires_at: '2026-06-17'
