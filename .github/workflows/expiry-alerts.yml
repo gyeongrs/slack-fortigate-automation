@@ -1,0 +1,29 @@
+name: expiry-alerts
+
+# Daily Slack reminders for temporary policies (14 / 7 / 1 days before expiry).
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 01:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[bot]"
+
+      - name: Post expiry alerts to Slack
+        continue-on-error: true
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_NOTIFY_CHANNEL: ${{ vars.SLACK_NOTIFY_CHANNEL }}
+        run: python -m slack_bot.notify_expiry

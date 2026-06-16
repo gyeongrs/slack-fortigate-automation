@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .config import MANAGED_TAG
+from .expiry import effective_schedule, schedule_body, schedule_name_for_policy
 from .fortigate import FortiGateClient
 from .models import Address, DesiredState, Policy, Service
 
@@ -18,7 +19,7 @@ Action = str  # "create" | "update" | "noop"
 
 @dataclass
 class PlanItem:
-    kind: str          # "address" | "service" | "policy"
+    kind: str          # "address" | "service" | "schedule" | "policy"
     name: str
     action: Action
     endpoint: str
@@ -84,7 +85,7 @@ def policy_body(p: Policy) -> dict:
         "dstaddr": [{"name": a} for a in p.dstaddr],
         "service": [{"name": s} for s in p.service],
         "action": p.action,
-        "schedule": p.schedule,
+        "schedule": effective_schedule(p),
         "logtraffic": p.logtraffic,
         "status": p.status,
         "nat": "enable" if p.nat else "disable",
@@ -140,6 +141,38 @@ def _plan_group(
     return items
 
 
+def _plan_schedules(
+    policies: list[Policy], current: dict[str, dict]
+) -> list[PlanItem]:
+    """Create/update one-time schedules for policies with expires_at."""
+    endpoint = "firewall/schedule/onetime"
+    items: list[PlanItem] = []
+    seen: set[str] = set()
+    for pol in policies:
+        if pol.expires_at is None:
+            continue
+        name = schedule_name_for_policy(pol)
+        if name in seen:
+            continue
+        seen.add(name)
+        body = schedule_body(pol)
+        existing = current.get(name)
+        if existing and existing.get("start-date"):
+            body["start-date"] = existing["start-date"]
+        if existing is None:
+            items.append(PlanItem("schedule", name, "create", endpoint, body))
+            continue
+        changes = _diff(body, existing)
+        action = "update" if changes else "noop"
+        items.append(
+            PlanItem(
+                "schedule", name, action, endpoint, body,
+                mkey=name, changes=changes,
+            )
+        )
+    return items
+
+
 def build_plan(state: DesiredState, client: FortiGateClient) -> Plan:
     plan = Plan()
     plan.items += _plan_group(
@@ -150,6 +183,7 @@ def build_plan(state: DesiredState, client: FortiGateClient) -> Plan:
         "service", "firewall.service/custom", state.services,
         client.get_services(), service_body,
     )
+    plan.items += _plan_schedules(state.policies, client.get_onetime_schedules())
     plan.items += _plan_group(
         "policy", "firewall/policy", state.policies,
         client.get_policies(), policy_body,

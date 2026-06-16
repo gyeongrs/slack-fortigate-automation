@@ -6,7 +6,7 @@ from __future__ import annotations
 from .fortigate import FortiGateClient, FortiGateError
 from .planner import Plan, PlanItem
 
-_KIND_ORDER = {"address": 0, "service": 1, "policy": 2}
+_KIND_ORDER = {"address": 0, "service": 1, "schedule": 2, "policy": 3}
 
 
 def apply_plan(plan: Plan, client: FortiGateClient) -> list[str]:

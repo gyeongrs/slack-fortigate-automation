@@ -76,6 +76,23 @@ class FortiGateClient:
     def delete_object(self, endpoint: str, mkey: str) -> dict:
         return self._request("DELETE", f"cmdb/{endpoint}/{mkey}")
 
+    # -- monitor API -----------------------------------------------------
+    def monitor_get(self, path: str, params: dict | None = None) -> dict:
+        """GET /api/v2/monitor/<path> (e.g. router/lookup)."""
+        return self._request("GET", f"monitor/{path.lstrip('/')}", params=params)
+
+    def router_lookup(self, destination: str) -> list[dict]:
+        """Perform route lookup for a destination IP (monitor/router/lookup)."""
+        if self._cfg.dry_run:
+            return []
+        data = self.monitor_get("router/lookup", {"destination": destination})
+        results = data.get("results", [])
+        if isinstance(results, dict):
+            return [results]
+        if isinstance(results, list):
+            return [r for r in results if isinstance(r, dict)]
+        return []
+
     # -- typed convenience ----------------------------------------------
     def get_addresses(self) -> dict[str, dict]:
         return {o["name"]: o for o in self.list_objects("firewall/address")}
@@ -88,3 +105,9 @@ class FortiGateClient:
 
     def get_policies(self) -> dict[str, dict]:
         return {o["name"]: o for o in self.list_objects("firewall/policy")}
+
+    def get_onetime_schedules(self) -> dict[str, dict]:
+        return {
+            o["name"]: o
+            for o in self.list_objects("firewall/schedule/onetime")
+        }

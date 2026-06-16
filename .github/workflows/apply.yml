@@ -27,13 +27,30 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[bot]"
 
       - name: Apply to FortiGate
+        id: apply
         env:
           # Set repo variable FORTIGATE_DRY_RUN=true to test without a device.
           FORTIGATE_DRY_RUN: ${{ vars.FORTIGATE_DRY_RUN }}
           FORTIGATE_HOST: ${{ secrets.FORTIGATE_HOST }}
           FORTIGATE_API_TOKEN: ${{ secrets.FORTIGATE_API_TOKEN }}
           FORTIGATE_VERIFY_TLS: ${{ secrets.FORTIGATE_VERIFY_TLS }}
-        run: fwctl apply --yes
+        run: |
+          set -o pipefail
+          fwctl apply --yes 2>&1 | tee apply.log
+
+      - name: Notify Slack (apply result)
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_NOTIFY_CHANNEL: ${{ vars.SLACK_NOTIFY_CHANNEL }}
+        run: |
+          STATUS=success
+          if [ "${{ steps.apply.outcome }}" != "success" ]; then STATUS=failure; fi
+          python -m slack_bot.notify_apply --log apply.log --status "$STATUS"

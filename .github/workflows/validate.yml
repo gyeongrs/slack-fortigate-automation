@@ -2,12 +2,15 @@ name: validate
 
 # Runs on every PR: offline guardrail validation (always) and, when device
 # secrets are present, an online dry-run plan posted to the job summary.
+# Posts the result to Slack (validate log + plan preview).
 on:
   pull_request:
     paths:
       - "policies/**"
       - "config/**"
       - "src/**"
+      - "slack_bot/**"
+      - ".github/**"
 
 jobs:
   validate:
@@ -25,16 +28,43 @@ jobs:
           pip install -e .
 
       - name: Validate guardrails (offline)
-        run: fwctl validate
+        id: validate
+        run: |
+          set -o pipefail
+          fwctl validate 2>&1 | tee validate.log
 
       - name: Plan (device or dry-run)
+        id: plan
+        if: always() && steps.validate.outcome == 'success'
         env:
           FORTIGATE_DRY_RUN: ${{ vars.FORTIGATE_DRY_RUN }}
           FORTIGATE_HOST: ${{ secrets.FORTIGATE_HOST }}
           FORTIGATE_API_TOKEN: ${{ secrets.FORTIGATE_API_TOKEN }}
           FORTIGATE_VERIFY_TLS: ${{ secrets.FORTIGATE_VERIFY_TLS }}
         run: |
-          echo '### FortiGate plan' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fwctl plan >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          set -o pipefail
+          {
+            echo '### FortiGate plan'
+            echo '```'
+            fwctl plan
+            echo '```'
+          } 2>&1 | tee plan.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify Slack (validate result)
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_NOTIFY_CHANNEL: ${{ vars.SLACK_NOTIFY_CHANNEL }}
+        run: |
+          pip install -e ".[bot]" -q
+          STATUS=success
+          if [ "${{ steps.validate.outcome }}" != "success" ]; then STATUS=failure; fi
+          python -m slack_bot.notify_validate \
+            --status "$STATUS" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --validate-log validate.log \
+            --plan-log plan.log

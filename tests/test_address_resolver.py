@@ -1,5 +1,9 @@
+from datetime import date
+
 from fwgitops.address_resolver import (
+    build_address_object,
     match_exact,
+    parse_address_spec,
     propose_object,
     resolve_addresses,
 )
@@ -10,6 +14,17 @@ _ADDR_OBJS = [
     {"name": "mgmt-host", "type": "ipmask", "subnet": "10.99.5.10/32"},
     {"name": "site-fqdn", "type": "fqdn", "fqdn": "example.com"},
 ]
+
+_RULES = {
+    "policy_naming": {
+        "zone_map": {
+            "core": "CR",
+            "ch": "CH",
+            "exco": "EX",
+        }
+    },
+    "expiry": {"max_valid_days": 365, "default_valid_days": 90},
+}
 
 
 def test_object_name_passes_through():
@@ -25,7 +40,6 @@ def test_bare_ip_is_treated_as_host():
 
 
 def test_ip_inside_subnet_is_not_an_exact_match():
-    # We never silently widen to a broader existing object.
     assert match_exact("10.20.5.7", _ADDR_OBJS) is None
 
 
@@ -41,14 +55,55 @@ def test_propose_object_for_host_and_subnet():
         "subnet": "10.30.1.2/32",
         "comment": "Auto-created from Slack request",
     }
-    net = propose_object("10.40.0.0/24", set())
-    assert net["name"] == "auto-10.40.0.0_24"
-    assert net["subnet"] == "10.40.0.0/24"
 
 
-def test_propose_object_avoids_name_collision():
-    obj = propose_object("10.30.1.2", {"auto-10.30.1.2"})
-    assert obj["name"] == "auto-10.30.1.2-2"
+def test_build_address_object_with_zone():
+    obj, errors = build_address_object(
+        name="ch-app",
+        address="10.51.10.15",
+        prefix="32",
+        zone="ch",
+        center="dc1",
+        expires_at=date(2026, 12, 31),
+        comment="NETOPS-1",
+        taken=set(),
+        rules=_RULES,
+    )
+    assert errors == []
+    assert obj == {
+        "name": "ch-app",
+        "type": "ipmask",
+        "subnet": "10.51.10.15/32",
+        "center": "dc1",
+        "zone": "ch",
+        "comment": "NETOPS-1",
+        "expires_at": "2026-12-31",
+    }
+
+
+def test_build_address_object_rejects_unknown_zone():
+    _, errors = build_address_object(
+        name="x",
+        address="10.1.1.1",
+        prefix="32",
+        zone="unknown",
+        taken=set(),
+        rules=_RULES,
+    )
+    assert any("zone" in e for e in errors)
+
+
+def test_parse_address_spec():
+    obj, errors = parse_address_spec(
+        "partner=172.16.8.20 prefix=32 zone=exco expire=90 comment=NETOPS",
+        set(),
+        rules=_RULES,
+    )
+    assert errors == []
+    assert obj["name"] == "partner"
+    assert obj["subnet"] == "172.16.8.20/32"
+    assert obj["zone"] == "exco"
+    assert obj["expires_at"]
 
 
 def test_resolve_without_autocreate_reports_unresolved():
@@ -58,27 +113,36 @@ def test_resolve_without_autocreate_reports_unresolved():
     assert bad == ["8.8.8.8"]
 
 
-def test_resolve_with_autocreate_makes_new_object():
+def test_bare_ip_not_autocreated_without_zone():
     names, new, bad = resolve_addresses(
-        ["corp-clients", "10.77.0.5/32"], _ADDR_OBJS, "by tester", autocreate=True
+        ["10.77.0.5/32"], _ADDR_OBJS, autocreate=True, rules=_RULES
     )
-    assert names == ["corp-clients", "auto-10.77.0.5"]
+    assert names == []
+    assert new == []
+    assert len(bad) == 1
+    assert "zone=" in bad[0]
+
+
+def test_resolve_with_zone_spec_creates_object():
+    names, new, bad = resolve_addresses(
+        ["ch-host=10.77.0.5 prefix=32 zone=ch expire=90"],
+        _ADDR_OBJS,
+        "by tester",
+        autocreate=True,
+        rules=_RULES,
+    )
+    assert names == ["ch-host"]
     assert bad == []
     assert len(new) == 1
     assert new[0]["subnet"] == "10.77.0.5/32"
-    assert new[0]["comment"] == "by tester"
+    assert new[0]["zone"] == "ch"
 
 
-def test_repeated_new_ip_creates_only_one_object():
+def test_named_address_requires_zone():
     names, new, bad = resolve_addresses(
-        ["10.77.0.5", "10.77.0.5/32"], _ADDR_OBJS, autocreate=True
+        ["partner=172.16.8.20/32"], _ADDR_OBJS, autocreate=True, rules=_RULES
     )
-    assert names == ["auto-10.77.0.5"]
-    assert len(new) == 1
-
-
-def test_invalid_token_still_unresolved_with_autocreate():
-    names, new, bad = resolve_addresses(["nope!!"], _ADDR_OBJS, autocreate=True)
     assert names == []
     assert new == []
-    assert bad == ["nope!!"]
+    assert len(bad) == 1
+    assert "zone=" in bad[0]

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 
+from .expiry import load_expiry_config
 from .models import DesiredState, Policy
 
 _ANY_TOKENS = {"all", "any"}
@@ -37,6 +39,8 @@ def validate(state: DesiredState, rules: dict) -> list[str]:
     allowed_ifaces = set(rules.get("allowed_interfaces", []))
     forbidden_ports = set(rules.get("forbidden_ports", []))
     require = rules.get("require", {})
+    expiry_cfg = load_expiry_config(rules)
+    today = date.today()
 
     # Map of service name -> ports, from custom services in desired state.
     custom_service_ports: dict[str, set[int]] = {}
@@ -46,7 +50,9 @@ def validate(state: DesiredState, rules: dict) -> list[str]:
         ) | _ports_from_range(svc.udp_portrange)
 
     for pol in state.policies:
-        errors.extend(_validate_policy(pol, forbid_any, allowed_ifaces, require))
+        errors.extend(
+            _validate_policy(pol, forbid_any, allowed_ifaces, require, expiry_cfg, today)
+        )
         _check_forbidden_ports(
             pol, custom_service_ports, forbidden_ports, errors
         )
@@ -103,10 +109,30 @@ def _check_duplicates(state: DesiredState) -> list[str]:
 
 
 def _validate_policy(
-    pol: Policy, forbid_any: dict, allowed_ifaces: set, require: dict
+    pol: Policy,
+    forbid_any: dict,
+    allowed_ifaces: set,
+    require: dict,
+    expiry_cfg,
+    today: date,
 ) -> list[str]:
     errs: list[str] = []
     prefix = f"policy '{pol.name}'"
+
+    if pol.expires_at is not None:
+        if pol.expires_at < today:
+            errs.append(
+                f"{prefix}: expires_at {pol.expires_at} is in the past "
+                f"(remove or extend the policy)."
+            )
+        span = (pol.expires_at - today).days
+        if span > expiry_cfg.max_valid_days:
+            errs.append(
+                f"{prefix}: validity span {span} days exceeds "
+                f"max_valid_days={expiry_cfg.max_valid_days}."
+            )
+        if pol.alert_days_before is not None and pol.alert_days_before < 0:
+            errs.append(f"{prefix}: alert_days_before must be >= 0.")
 
     if forbid_any.get("srcaddr") and _has_any(pol.srcaddr):
         errs.append(f"{prefix}: srcaddr must not be 'all'/'any'.")
@@ -122,6 +148,8 @@ def _validate_policy(
             )
 
     for field, expected in require.items():
+        if field == "schedule" and pol.expires_at is not None:
+            continue  # temporary policies use auto-generated one-time schedules
         actual = getattr(pol, field, None)
         if actual != expected:
             errs.append(

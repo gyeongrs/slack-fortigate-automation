@@ -20,11 +20,15 @@ from __future__ import annotations
 import ipaddress
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from .config import REPO_ROOT
 from .models import Address, Policy
+
+if TYPE_CHECKING:
+    from .fortigate import FortiGateClient
 
 DEVICES_FILE = REPO_ROOT / "config" / "devices.yaml"
 
@@ -59,9 +63,25 @@ class Device:
     vdom: str | None = None
     token_env: str | None = None
     routes: list[Route] = field(default_factory=list)
+    client: FortiGateClient | None = field(default=None, repr=False, compare=False)
 
     def lookup(self, ip: str) -> Route | None:
-        """Longest-prefix-match route lookup for a single IP address."""
+        """Longest-prefix-match route lookup for a single IP address.
+
+        When ``client`` is set (live FortiGate), uses
+        ``GET /api/v2/monitor/router/lookup?destination=<ip>`` first, then
+        falls back to the static ``routes`` table from devices.yaml.
+        """
+        if self.client is not None:
+            from .router_monitor import lookup_route
+
+            try:
+                live = lookup_route(self.client, ip)
+            except Exception:
+                live = None
+            if live is not None:
+                return live
+
         addr = ipaddress.ip_address(ip)
         best: Route | None = None
         for r in self.routes:

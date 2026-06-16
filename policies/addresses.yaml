@@ -1,57 +1,91 @@
+# Address book (GitOps desired state).
+#
+# Optional GitOps-only metadata (not pushed to FortiGate API):
+#   center — site/datacenter key (e.g. dc1 → dc1-{zone}-fw in devices.yaml)
+#   zone   — security zone key (core, ch, svr, …); see config/policy_rules.yaml zone_map
+#
 addresses:
-- name: app-web-server
-  type: ipmask
-  subnet: 10.10.20.15/32
-  comment: Web frontend
-- name: corp-clients
-  type: ipmask
-  subnet: 10.20.0.0/16
-  comment: Corporate client subnet
-- name: AWS-10.52.10.1
-  type: ipmask
-  subnet: 10.52.10.1/32
-  comment: AWS Server
-- name: Azure-10.56.10.1
-  type: ipmask
-  subnet: 10.56.10.1/32
-  comment: Azure Server
-- name: mgmt-host
-  type: ipmask
-  subnet: 10.99.5.10/32
-  comment: Management host (behind mgt-fw)
-- name: partner-host
-  type: ipmask
-  subnet: 172.16.8.20/32
-  comment: External partner host (behind exco-fw)
-- name: AWS_MGT_10.20.1.10/32
-  type: ipmask
-  subnet: 10.20.1.10/32
-  comment: AWS_MGT-Test"
-- name: auto-10.54.10.1
-  type: ipmask
-  subnet: 10.54.10.1/32
-  comment: Auto-created from Slack request by gyeongrs
-- name: auto-10.52.20.1
-  type: ipmask
-  subnet: 10.52.20.1/32
-  comment: Auto-created from Slack request by gyeongrs
-- name: auto-10.53.20.10
-  type: ipmask
-  subnet: 10.53.20.10/32
-  comment: Auto-created from Slack request by gyeongrs
-- name: auto-10.52.30.15
-  type: ipmask
-  subnet: 10.52.30.15/32
-  comment: Auto-created from Slack request by gyeongrs
-- name: auto-10.55.30.1
-  type: ipmask
-  subnet: 10.55.30.1/32
-  comment: Auto-created from Slack request by gyeongrs
-- name: auto-10.57.10.1
-  type: ipmask
-  subnet: 10.57.10.1/32
-  comment: Auto-created from Slack request by gyeongrs
-- name: auto-10.56.1.1
-  type: ipmask
-  subnet: 10.56.1.1/32
-  comment: Auto-created from Slack request by gyeongrs
+
+  - name: AWS-10.52.10.1
+    type: ipmask
+    subnet: 10.52.10.1/32
+    center: dc1
+    zone: mgt
+    comment: AWS Server
+
+  - name: Azure-10.56.10.1
+    type: ipmask
+    subnet: 10.56.10.1/32
+    center: dc1
+    zone: svr
+    comment: Azure Server
+
+  - name: mgmt-host
+    type: ipmask
+    subnet: 10.99.5.10/32
+    center: dc1
+    zone: mgt
+    comment: Management host (behind mgt-fw)
+
+  - name: partner-host
+    type: ipmask
+    subnet: 172.16.8.20/32
+    center: dc1
+    zone: exco
+    comment: External partner host (behind exco-fw)
+
+  - name: AWS_MGT_10.20.1.10/32
+    type: ipmask
+    subnet: 10.20.1.10/32
+    center: dc1
+    zone: mgt
+    comment: AWS_MGT-Test
+
+  - name: auto-10.54.10.1
+    type: ipmask
+    subnet: 10.54.10.1/32
+    center: dc1
+    zone: inet
+    comment: Auto-created from Slack request by gyeongrs
+
+  - name: auto-10.52.20.1
+    type: ipmask
+    subnet: 10.52.20.1/32
+    center: dc1
+    zone: mgt
+    comment: Auto-created from Slack request by gyeongrs
+
+  - name: auto-10.53.20.10
+    type: ipmask
+    subnet: 10.53.20.10/32
+    center: dc1
+    zone: exco
+    comment: Auto-created from Slack request by gyeongrs
+
+  - name: auto-10.52.30.15
+    type: ipmask
+    subnet: 10.52.30.15/32
+    center: dc1
+    zone: mgt
+    comment: Auto-created from Slack request by gyeongrs
+
+  - name: auto-10.55.30.1
+    type: ipmask
+    subnet: 10.55.30.1/32
+    center: dc1
+    zone: cc
+    comment: Auto-created from Slack request by gyeongrs
+
+  - name: auto-10.57.10.1
+    type: ipmask
+    subnet: 10.57.10.1/32
+    center: dc1
+    zone: vdi
+    comment: Auto-created from Slack request by gyeongrs
+
+  - name: auto-10.56.1.1
+    type: ipmask
+    subnet: 10.56.1.1/32
+    center: dc1
+    zone: svr
+    comment: Auto-created from Slack request by gyeongrs

@@ -84,8 +84,9 @@ pytest                   # 검증기 테스트
 - 실행: `uvicorn slack_bot.app:api --port 3000`
 
 ### 모바일 승인 플로우
-`/fw-request` 제출 → 봇이 **PR 생성 + 승인/거부 버튼 메시지** 게시 →
-**요청자가 아닌 다른 사람**이 폰에서 `Approve & merge` 탭 → PR 머지(→ CI apply),
+`/fw-request` 제출 → 봇이 **PR 생성 + 상세 요약 메시지**(요청자·사유·정책·로그 설정) + **승인/거부 버튼** 게시 →
+**요청자가 아닌 다른 사람**이 폰에서 `Approve & merge` 탭 → PR 머지(→ CI apply) →
+**apply.yml**이 FortiGate 적용 후 **Slack에 결과 요약**(요청자·승인자·commit·변경 파일·apply 로그·logtraffic) 게시,
 `Reject` 탭 → PR close. 기본적으로 요청자 본인이 승인하면 차단됩니다(ephemeral 경고).
 혼자 테스트하거나 1인 운영이면 `.env`에 `ALLOW_SELF_APPROVE=true`로 자기승인을
 허용할 수 있습니다(운영에서는 `false` 권장).
@@ -94,6 +95,8 @@ pytest                   # 검증기 테스트
 ## GitHub 준비
 
 - Repo Secrets: `FORTIGATE_HOST`, `FORTIGATE_API_TOKEN`, `FORTIGATE_VERIFY_TLS`
+- Repo Secrets: `SLACK_BOT_TOKEN` (apply 완료 후 Slack 요약 알림용 — 봇과 동일 토큰)
+- Repo Variables: `SLACK_NOTIFY_CHANNEL` (예: `netops-changes`, `#` 없이도 됨)
 - `production` Environment에 **필수 리뷰어**를 지정해 apply를 한 번 더 게이트
 - `main` 브랜치 보호 규칙: PR 필수 + `validate` 체크 통과 필수
 

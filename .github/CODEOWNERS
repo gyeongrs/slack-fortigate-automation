@@ -1,0 +1,10 @@
+# NetOps must review all firewall policy / automation changes.
+# In GitHub: Settings → Branches → main → enable
+#   "Require review from Code Owners" for this file to block merge.
+
+/policies/                    @gyeongrs/netops
+/config/                      @gyeongrs/netops
+/src/fwgitops/                @gyeongrs/netops
+/slack_bot/                   @gyeongrs/netops
+/.github/workflows/           @gyeongrs/netops
+/.github/CODEOWNERS           @gyeongrs/netops

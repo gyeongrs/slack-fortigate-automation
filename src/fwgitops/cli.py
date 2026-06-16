@@ -13,13 +13,23 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .address_resolver import resolve_one
+from .expiry import load_expiry_config, policies_due_for_alert
 from .loader import load_desired_state, load_rules, load_shared_services
+from .models import Address, Policy
 from .multi_device import apply_all_devices, combined_plan
 from .planner import Plan
 from .route_selector import load_devices, select_targets
+from .router_monitor import (
+    load_devices_live,
+    load_route_probes_from_repo,
+    sync_routes_file,
+)
 from .validator import validate as run_validate
 
 app = typer.Typer(add_completion=False, help="FortiGate GitOps automation.")
+routes_app = typer.Typer(help="Routing table reference and live lookup.")
+app.add_typer(routes_app, name="routes")
 console = Console()
 
 
@@ -126,12 +136,38 @@ def apply(
 
 
 @app.command()
-def routes() -> None:
-    """Show the routing table of each firewall in config/devices.yaml.
+def expiry_check(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print alerts without posting to Slack."
+    ),
+) -> None:
+    """List (or Slack-notify) temporary policies due for expiry alerts today."""
+    state = load_desired_state()
+    rules = load_rules()
+    cfg = load_expiry_config(rules)
+    alerts = policies_due_for_alert(state.policies, cfg)
+    if not alerts:
+        console.print("[green]No expiry alerts due today.[/green]")
+        return
+    for alert in alerts:
+        pol = alert.policy
+        console.print(
+            f"[yellow]{alert.kind}[/yellow] "
+            f"{pol.name} ({pol.device or 'default'}) "
+            f"expires {pol.expires_at} — {alert.days_until} day(s) left"
+        )
+    if dry_run:
+        return
+    from slack_bot.notify_expiry import main as notify_main
 
-    In dry-run mode these come from devices.yaml; with a live device they would
-    come from GET /api/v2/monitor/router/ipv4.
-    """
+    raise typer.Exit(notify_main([]))
+
+
+@routes_app.callback(invoke_without_command=True)
+def routes_show(ctx: typer.Context) -> None:
+    """Show reference routing tables from config/devices.yaml."""
+    if ctx.invoked_subcommand is not None:
+        return
     devices = load_devices()
     if not devices:
         console.print(
@@ -159,6 +195,156 @@ def routes() -> None:
         console.print()
 
 
+@routes_app.command("sync")
+def routes_sync(
+    write: bool = typer.Option(
+        True,
+        "--write/--dry-run",
+        help="Write refreshed routes back to devices.yaml (default: write).",
+    ),
+) -> None:
+    """Refresh devices.yaml routes from live GET /api/v2/monitor/router/lookup.
+
+    Probes each IP in ``route_probes`` (and address-book subnets) on every
+    inventory firewall, then stores the merged results as the offline reference.
+    """
+    probes = load_route_probes_from_repo()
+    console.print(
+        f"[bold]Probing {len(probes)} destination(s) per firewall "
+        f"via monitor/router/lookup[/bold]"
+    )
+    try:
+        per_device = sync_routes_file(write=write, probe_ips=probes)
+    except RuntimeError as exc:
+        console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=1) from exc
+
+    for name, routes in per_device.items():
+        console.print(f"  [green]{name}[/green]: {len(routes)} route(s)")
+    if write:
+        console.print("[bold green]Updated config/devices.yaml[/bold green]")
+    else:
+        console.print("[dim]Dry-run: devices.yaml not modified[/dim]")
+
+
+@routes_app.command("probe")
+def routes_probe(
+    destination: str = typer.Argument(..., help="Destination IP to look up"),
+    device: str = typer.Option(
+        None, "--device", "-d", help="Inventory name (default: all devices)"
+    ),
+) -> None:
+    """Show live router/lookup results across inventory firewalls."""
+    devices = load_devices_live()
+    if device:
+        devices = [d for d in devices if d.name == device]
+    if not devices:
+        console.print("[bold red]No matching device(s).[/bold red]")
+        raise typer.Exit(code=1)
+
+    table = Table(title=f"router/lookup destination={destination}")
+    table.add_column("Firewall")
+    table.add_column("Network")
+    table.add_column("Interface")
+    table.add_column("Type")
+    table.add_column("Gateway")
+    table.add_column("Source")
+    for dev in devices:
+        route = dev.lookup(destination)
+        if route is None:
+            table.add_row(dev.name, "-", "-", "-", "-", "[red]no route[/red]")
+            continue
+        source = (
+            "[cyan]live API[/cyan]"
+            if dev.client is not None
+            else "[dim]yaml cache[/dim]"
+        )
+        table.add_row(
+            dev.name,
+            route.dst,
+            route.interface,
+            route.type,
+            route.gateway or "-",
+            source,
+        )
+    console.print(table)
+
+
+def _render_selection(
+    title: str, selection, console: Console | None = None
+) -> None:
+    out = console or Console()
+    targets = selection.transit
+    table = Table(title=title)
+    table.add_column("Firewall")
+    table.add_column("src route")
+    table.add_column("dst route")
+    table.add_column("Verdict")
+    for m in selection.matches:
+        verdict = (
+            "[bold green]TARGET[/bold green]"
+            if m.is_transit
+            else "[dim]skip[/dim]"
+        )
+        table.add_row(
+            m.device,
+            _route_cell(m.src_route),
+            _route_cell(m.dst_route),
+            f"{verdict}  [dim]{m.reason}[/dim]",
+        )
+    out.print(table)
+    if not targets:
+        out.print("  [bold red]No firewall is on the path.[/bold red]")
+    else:
+        for m in targets:
+            ci = m.src_route.interface  # type: ignore[union-attr]
+            co = m.dst_route.interface  # type: ignore[union-attr]
+            out.print(
+                f"  -> target: [bold green]{m.device}[/bold green] "
+                f"(srcintf={ci}, dstintf={co})"
+            )
+    out.print()
+
+
+@app.command()
+def lookup(
+    src: str = typer.Option(..., "--src", help="Source IP or CIDR"),
+    dst: str = typer.Option(..., "--dst", help="Destination IP or CIDR"),
+) -> None:
+    """Show transit firewalls for arbitrary src/dst IPs (all devices.yaml entries).
+
+    Unlike ``select``, this does not read firewall_policies.yaml — use it to
+    verify ch/svr/vdi/dmz/cc routing for zone IPs such as 10.51.10.1 -> 10.56.10.1.
+    """
+    devices = load_devices_live()
+    if not devices:
+        console.print(
+            "[bold red]No devices found in config/devices.yaml.[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+    state = load_desired_state()
+    addr_objs = [a.model_dump() for a in state.addresses]
+    src_name = resolve_one(src, addr_objs) or src
+    dst_name = resolve_one(dst, addr_objs) or dst
+    addr_index = {a.name: a for a in state.addresses}
+    if src_name not in addr_index:
+        addr_index[src_name] = Address(name=src_name, type="ipmask", subnet=src)
+    if dst_name not in addr_index:
+        addr_index[dst_name] = Address(name=dst_name, type="ipmask", subnet=dst)
+
+    probe = Policy(
+        name="_lookup",
+        srcintf=["auto"],
+        dstintf=["auto"],
+        srcaddr=[src_name],
+        dstaddr=[dst_name],
+        service=["HTTPS"],
+    )
+    selection = select_targets(probe, addr_index, devices)
+    _render_selection(f"Lookup {src} -> {dst}", selection, console)
+
+
 @app.command()
 def select() -> None:
     """Pick the target firewall for each policy from its routing path.
@@ -167,7 +353,7 @@ def select() -> None:
     are used; otherwise the live device's route lookup would be queried.
     """
     state = load_desired_state()
-    devices = load_devices()
+    devices = load_devices_live()
     if not devices:
         console.print(
             "[bold red]No devices found in config/devices.yaml.[/bold red]"
@@ -178,39 +364,11 @@ def select() -> None:
 
     for policy in state.policies:
         selection = select_targets(policy, addr_index, devices)
-        targets = selection.transit  # every firewall the traffic transits
-
-        table = Table(title=f"Policy '{policy.name}'  ({_endpoints(policy)})")
-        table.add_column("Firewall")
-        table.add_column("src route")
-        table.add_column("dst route")
-        table.add_column("Verdict")
-        for m in selection.matches:
-            verdict = (
-                "[bold green]TARGET[/bold green]"
-                if m.is_transit
-                else "[dim]skip[/dim]"
-            )
-            table.add_row(
-                m.device,
-                _route_cell(m.src_route),
-                _route_cell(m.dst_route),
-                f"{verdict}  [dim]{m.reason}[/dim]",
-            )
-        console.print(table)
-        if not targets:
-            console.print(
-                "  [bold red]No firewall is on the path for this policy.[/bold red]"
-            )
-        else:
-            for m in targets:
-                ci = m.src_route.interface  # type: ignore[union-attr]
-                co = m.dst_route.interface  # type: ignore[union-attr]
-                console.print(
-                    f"  -> target: [bold green]{m.device}[/bold green] "
-                    f"(srcintf={ci}, dstintf={co})"
-                )
-        console.print()
+        _render_selection(
+            f"Policy '{policy.name}'  ({_endpoints(policy)})",
+            selection,
+            console,
+        )
 
 
 def _endpoints(policy) -> str:
