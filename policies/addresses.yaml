@@ -85,3 +85,10 @@ addresses:
   zone: svr
   comment: test
   expires_at: '2026-06-17'
+- name: MGT-10.52.10.10
+  type: ipmask
+  subnet: 10.52.10.10/32
+  center: dc1
+  zone: mgt
+  comment: 開発用
+  expires_at: '2026-06-17'
