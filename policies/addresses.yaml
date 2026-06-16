@@ -78,3 +78,10 @@ addresses:
   zone: ch
   comment: teset
   expires_at: '2026-06-17'
+- name: SVR-10.56.10.10
+  type: ipmask
+  subnet: 10.56.10.10/32
+  center: dc1
+  zone: svr
+  comment: test
+  expires_at: '2026-06-17'
