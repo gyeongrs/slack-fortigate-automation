@@ -336,3 +336,40 @@ policies:
   requester: gyeongrs
   requester_slack_id: U0B85045KGD
   comment: Requested by gyeongrs (test) [vdi-fw]
+- name: Test-svr-fw
+  device: svr-fw
+  srcintf:
+  - svr-trust
+  dstintf:
+  - svr-untrust
+  srcaddr: &id016
+  - Azure-10.56.10.1
+  dstaddr: &id017
+  - auto-10.57.10.1
+  service: &id018
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [svr-fw]
+- name: Test-vdi-fw
+  device: vdi-fw
+  srcintf:
+  - vdi-untrust
+  dstintf:
+  - vdi-trust
+  srcaddr: *id016
+  dstaddr: *id017
+  service: *id018
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [vdi-fw]
