@@ -11,3 +11,7 @@ services:
   protocol: TCP
   comment: Auto-created from Slack request by gyeongrs
   tcp_portrange: '800'
+- name: auto-tcp-8443
+  protocol: TCP
+  comment: Auto-created from Slack policy request by gyeongrs
+  tcp_portrange: '8443'
