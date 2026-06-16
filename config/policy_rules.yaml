@@ -72,6 +72,33 @@ require:
   logtraffic: all
   schedule: always
 
+# Temporary policies: expires_at in firewall_policies.yaml (YYYY-MM-DD).
+# Slack /fw-request defaults to default_valid_days; a one-time FortiGate
+# schedule is created on apply. Daily CI posts Slack alerts before expiry.
+expiry:
+  default_valid_days: 90
+  alert_days_before: [14, 7, 1]   # notify when this many days remain
+  max_valid_days: 365             # reject longer temporary policies
+
 # Refuse to manage more than this many policy changes in a single apply
 # (a tripwire against accidental mass changes).
 max_changes_per_apply: 10
+
+# Policy prefix = center_code + zone_code (any short string — not limited to A/B/C)
+#   dc1-core-fw  →  D1 + CR  →  D1CR10.50.1.1>D1CR10.51.10.1
+policy_naming:
+  center_map:        # datacenter / site (1st segment) — 편한 코드로 자유롭게
+    dc1: D1
+    dc2: D2
+  zone_map:          # security zone (2nd segment)
+    core: CR
+    inet: IN
+    mgt: MG
+    mgmt: MG
+    exco: EX
+    ch: CH
+    svr: SV
+    vdi: VD
+    dmz: DZ
+    cc: CC
+  default_center_code: "00"   # legacy {zone}-fw only (e.g. ch-fw → 00CH)

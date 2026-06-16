@@ -1,16 +1,35 @@
 # Firewall inventory used for route-aware target selection.
 #
-# In dry-run mode (FORTIGATE_DRY_RUN=true) the "routes" block below is used as a
-# mock routing table (FIB) so the selection logic can be tested without any
-# hardware. With a live device the routes would instead come from
-#   GET /api/v2/monitor/router/lookup?destination=<ip>
+# Offline (FORTIGATE_DRY_RUN=true): the "routes" block is the mock FIB.
+# Online: route selection calls GET /api/v2/monitor/router/lookup?destination=<ip>
+# on each inventory device (falls back to "routes" if the API is unreachable).
 #
-# A device is chosen as the policy target when the requested traffic *transits*
-# it: the source resolves to one interface and the destination to a different
-# interface. Every transit firewall on the path gets its own allow policy.
+# Refresh the reference table from live devices:
+#   fwctl routes sync
+# Probe one destination across all firewalls:
+#   fwctl routes probe 10.52.10.1
+#
+# Device name pattern: {center}-{zone}-fw  (e.g. dc1-core-fw)
+# Policy prefix = center letter + zone letter (see policy_naming in policy_rules.yaml)
+#
+# A device is chosen as the policy target when traffic *transits* it (src and
+# dst resolve to different interfaces). Every transit firewall gets a policy.
+
+route_probes:
+  - 10.52.10.1   # AWS zone
+  - 10.53.10.1   # partner / exco
+  - 10.54.10.1   # external / inet
+  - 10.55.10.1   # core local
+  - 10.51.10.1   # ch zone
+  - 10.56.10.1   # svr zone
+  - 10.57.10.1   # vdi zone
+  - 10.1.10.1    # dmz zone
+  - 10.58.10.1   # cc zone
+  - 10.99.5.10   # mgmt host
+  - 172.16.8.20  # external partner
 
 devices:
-  - name: core-fw
+  - name: dc1-core-fw
     host: 10.0.0.1
     vdom: root
     token_env: FORTIGATE_API_TOKEN_CORE
@@ -60,7 +79,7 @@ devices:
       - {dst: 10.58.30.0/24, interface: core-untrust, type: static}
       - {dst: 10.58.40.0/24, interface: core-untrust, type: static}
 
-  - name: inet-fw
+  - name: dc1-inet-fw
     host: 10.0.0.2
     vdom: root
     token_env: FORTIGATE_API_TOKEN_INET
@@ -80,7 +99,7 @@ devices:
       - {dst: 10.54.50.0/24, interface: inet-untrust, type: static}
       - {dst: 10.54.60.0/24, interface: inet-untrust, type: static}
 
-  - name: mgt-fw
+  - name: dc1-mgt-fw
     host: 10.0.0.3
     vdom: root
     token_env: FORTIGATE_API_TOKEN_MGT
@@ -100,7 +119,7 @@ devices:
       - {dst: 10.52.50.0/24, interface: mgt-trust, type: connected}
       - {dst: 10.52.60.0/24, interface: mgt-trust, type: connected}
 
-  - name: exco-fw
+  - name: dc1-exco-fw
     host: 10.0.0.4
     vdom: root
     token_env: FORTIGATE_API_TOKEN_EXCO
@@ -120,7 +139,7 @@ devices:
       - {dst: 10.53.50.0/24, interface: exco-untrust, type: static}
       - {dst: 10.53.60.0/24, interface: exco-untrust, type: static}
 
-  - name: ch-fw
+  - name: dc1-ch-fw
     host: 10.0.0.5
     vdom: root
     token_env: FORTIGATE_API_TOKEN_CH
@@ -138,7 +157,7 @@ devices:
       - {dst: 10.1.0.0/16, interface: ch-untrust, type: static}
       - {dst: 10.58.0.0/16, interface: ch-untrust, type: static}
 
-  - name: svr-fw
+  - name: dc1-svr-fw
     host: 10.0.0.6
     vdom: root
     token_env: FORTIGATE_API_TOKEN_SVR
@@ -156,7 +175,7 @@ devices:
       - {dst: 10.1.0.0/16, interface: svr-untrust, type: static}
       - {dst: 10.58.0.0/16, interface: svr-untrust, type: static}
 
-  - name: vdi-fw
+  - name: dc1-vdi-fw
     host: 10.0.0.7
     vdom: root
     token_env: FORTIGATE_API_TOKEN_VDI
@@ -174,7 +193,7 @@ devices:
       - {dst: 10.1.0.0/16, interface: vdi-untrust, type: static}
       - {dst: 10.58.0.0/16, interface: vdi-untrust, type: static}
 
-  - name: dmz-fw
+  - name: dc1-dmz-fw
     host: 10.0.0.8
     vdom: root
     token_env: FORTIGATE_API_TOKEN_DMZ
@@ -192,7 +211,7 @@ devices:
       - {dst: 10.57.0.0/16, interface: dmz-untrust, type: static}
       - {dst: 10.58.0.0/16, interface: dmz-untrust, type: static}
 
-  - name: cc-fw
+  - name: dc1-cc-fw
     host: 10.0.0.9
     vdom: root
     token_env: FORTIGATE_API_TOKEN_CC
