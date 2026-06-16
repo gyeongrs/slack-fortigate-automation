@@ -1,4 +1,4 @@
-"""Slack entrypoint: `/fw-request` opens a modal; submission opens a PR and
+"""Slack entrypoint: `/fw-policy` opens a modal; submission opens a PR and
 posts an approval message with Approve / Reject buttons (mobile-friendly).
 
 Approval rules:
@@ -13,7 +13,7 @@ Run modes:
         uvicorn slack_bot.app:api --port 3000
 
 Slack app config:
-    - Slash commands  /fw-request, /fw-address
+    - Slash commands  /fw-policy, /fw-address
     - Interactivity enabled (Socket Mode toggle, or request URL /slack/events)
     Scopes: commands, chat:write
 """
@@ -31,7 +31,11 @@ from fastapi import FastAPI, Request
 from slack_bolt import App
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 
-from fwgitops.address_resolver import build_address_object, resolve_addresses
+from fwgitops.address_resolver import (
+    build_address_object,
+    classify_address_tokens,
+    suggest_address_defaults,
+)
 from fwgitops.expiry import expires_at_from_valid_days, load_expiry_config
 from fwgitops.models import Address, DesiredState, Policy, Service
 from fwgitops.router_monitor import attach_live_clients, load_devices_live
@@ -79,6 +83,28 @@ app = App(
 handler = SlackRequestHandler(app)
 api = FastAPI()
 
+_METADATA_MAX = 3000
+
+
+def _pack_pending(pending: dict) -> str:
+    raw = json.dumps(pending, separators=(",", ":"), ensure_ascii=False)
+    if len(raw) > _METADATA_MAX:
+        raise ValueError(
+            f"Policy wizard state too large ({len(raw)} chars); "
+            "reduce the number of new addresses per request."
+        )
+    return raw
+
+
+def _unpack_pending(raw: str) -> dict | None:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
 
 # --- modal --------------------------------------------------------------
 def _modal() -> dict:
@@ -96,7 +122,7 @@ def _modal() -> dict:
 
     return {
         "type": "modal",
-        "callback_id": "fw_request_submit",
+        "callback_id": "fw_policy_submit",
         "title": {"type": "plain_text", "text": "Firewall Request"},
         "submit": {"type": "plain_text", "text": "Open PR"},
         "close": {"type": "plain_text", "text": "Cancel"},
@@ -108,14 +134,12 @@ def _modal() -> dict:
                         "type": "mrkdwn",
                         "text": (
                             ":satellite: Target firewall & interfaces are "
-                            "auto-detected from routing. Addresses: existing "
-                            "object name, or new object spec "
-                            "`name=10.51.10.1 prefix=32 zone=ch expire=90 "
-                            "comment=NETOPS`. Services: built-in (HTTPS), "
-                            "catalog name, `8443`, `tcp/9000`, or "
-                            "`svc=tcp/8443`. Use `/fw-address` to register "
-                            "addresses first. Policy name: "
-                            "{center}{zone}{src}>{center}{zone}{dst}."
+                            "auto-detected from routing. Source/destination: "
+                            "existing object name or IP/CIDR/FQDN — if the "
+                            "object does not exist, an address form opens "
+                            "automatically (same as `/fw-address`). Services: "
+                            "built-in (HTTPS), catalog name, `8443`, "
+                            "`tcp/9000`, or `svc=tcp/8443`."
                         ),
                     }
                 ],
@@ -177,7 +201,7 @@ def _address_modal() -> dict:
 
 
 # --- slash command + submission ----------------------------------------
-@app.command("/fw-request")
+@app.command("/fw-policy")
 def open_request_modal(ack, body, client):
     ack()
     client.views_open(trigger_id=body["trigger_id"], view=_modal())
@@ -186,7 +210,19 @@ def open_request_modal(ack, body, client):
 @app.command("/fw-address")
 def open_address_modal(ack, body, client):
     ack()
-    client.views_open(trigger_id=body["trigger_id"], view=_address_modal())
+    try:
+        client.views_open(trigger_id=body["trigger_id"], view=_address_modal())
+    except Exception as exc:
+        log.error("views_open failed for /fw-address:\n%s", traceback.format_exc())
+        client.chat_postEphemeral(
+            channel=body["channel_id"],
+            user=body["user_id"],
+            text=(
+                f":x: Could not open Address Request form: `{exc}`\n"
+                "If the command itself is unknown, add `/fw-address` under "
+                "*Features → Slash Commands* in your Slack app settings."
+            ),
+        )
 
 
 def _allow_self_approve() -> bool:
@@ -270,25 +306,85 @@ def _validate_request(
     return run_validate(state, rules)
 
 
-@app.view("fw_request_submit")
-def handle_submission(ack, body, view, client):
-    ack()
-    values = view["state"]["values"]
+def _modal_text_input(
+    block_id: str,
+    label: str,
+    placeholder: str,
+    *,
+    initial: str = "",
+) -> dict:
+    element: dict = {
+        "type": "plain_text_input",
+        "action_id": "value",
+        "placeholder": {"type": "plain_text", "text": placeholder},
+    }
+    if initial:
+        element["initial_value"] = initial[:3000]
+    return {
+        "type": "input",
+        "block_id": block_id,
+        "label": {"type": "plain_text", "text": label},
+        "element": element,
+    }
 
-    def field(block_id: str) -> str:
-        return values[block_id]["value"]["value"].strip()
 
-    requester_id = body["user"]["id"]
-    requester = body["user"]["username"]
-    requester_real = body["user"].get("name") or requester
-    team_name = (body.get("team") or {}).get("domain") or ""
-    justification = field("justification")
+def _policy_address_step_modal(
+    pending: dict,
+    token: str,
+    *,
+    step: int,
+    total: int,
+    defaults: dict[str, str],
+    valid_days_default: str,
+    comments_default: str,
+) -> dict:
+    return {
+        "type": "modal",
+        "callback_id": "fw_policy_address_step",
+        "private_metadata": _pack_pending(pending),
+        "title": {"type": "plain_text", "text": f"Address ({step}/{total})"},
+        "submit": {"type": "plain_text", "text": "Next" if step < total else "Create PR"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": (
+                            f":busts_in_silhouette: Policy needs a new address object "
+                            f"for `{token}`. Fill in the fields below "
+                            f"(same as `/fw-address`)."
+                        ),
+                    }
+                ],
+            },
+            _modal_text_input("name", "name", "ch-app-01", initial=defaults.get("name", "")),
+            _modal_text_input(
+                "address", "address", "10.51.10.15", initial=defaults.get("address", "")
+            ),
+            _modal_text_input("prefix", "Prefix", "32", initial=defaults.get("prefix", "32")),
+            _modal_text_input("valid_days", "Expire Day", "90", initial=valid_days_default),
+            _modal_text_input("justification", "Comments", "NETOPS-1001", initial=comments_default),
+            _modal_text_input("zone", "Zone", "ch"),
+        ],
+    }
 
-    name = "pending"  # replaced after route + naming
-    srcaddr = _split(field("srcaddr"))
-    dstaddr = _split(field("dstaddr"))
-    service = _split(field("service"))
-    valid_days_raw = field("valid_days")
+
+def _finalize_policy_request(client, pending: dict) -> None:
+    """Open policy PR after all address objects are resolved."""
+    requester_id = pending["requester_id"]
+    requester = pending["requester"]
+    requester_real = pending["requester_real"]
+    team_name = pending["team_name"]
+    justification = pending["justification"]
+    srcaddr_raw = pending["srcaddr_raw"]
+    dstaddr_raw = pending["dstaddr_raw"]
+    service = pending["service"]
+    valid_days_raw = pending["valid_days_raw"]
+    inline_new = pending.get("inline_new") or []
+    wizard_new = pending.get("created") or []
+    name = "pending"
 
     try:
         rules = fetch_repo_yaml("config/policy_rules.yaml")
@@ -308,49 +404,72 @@ def handle_submission(ack, body, view, client):
 
     channel = os.getenv("SLACK_NOTIFY_CHANNEL", requester_id)
 
-    # Resolve IP / CIDR inputs (e.g. 10.99.5.10/32) to existing address object
-    # names by matching the address book. Object names pass through unchanged.
     try:
         addr_objs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
     except Exception as exc:
-        log.error("address book lookup failed:\n%s", traceback.format_exc())
         client.chat_postMessage(
             channel=requester_id,
             text=f":x: Could not read the address book: `{exc}`",
         )
         return
 
-    autocomment = f"Auto-created from Slack request by {requester}"
-    src_names, src_new, src_bad = resolve_addresses(
-        srcaddr, addr_objs, autocomment, autocreate=True, rules=rules
-    )
-    dst_names, dst_new, dst_bad = resolve_addresses(
-        dstaddr, addr_objs + src_new, autocomment, autocreate=True, rules=rules
-    )
-    if src_bad or dst_bad:
+    autocomment = f"Auto-created from Slack policy request by {requester}"
+    merged_pool = addr_objs + inline_new + wizard_new
+    token_map: dict[str, str] = pending.get("token_map") or {}
+
+    def _names_for_side(raw_tokens: list[str]) -> tuple[list[str] | None, list[str]]:
+        names: list[str] = []
+        pool = list(merged_pool)
+        for t in raw_tokens:
+            if t in token_map:
+                if token_map[t] not in names:
+                    names.append(token_map[t])
+                continue
+            resolved, new_objs, need = classify_address_tokens(
+                [t], pool, autocomment, rules=rules
+            )
+            if need:
+                return None, need
+            pool.extend(new_objs)
+            names.extend(resolved)
+        return names, []
+
+    srcaddr, src_bad = _names_for_side(srcaddr_raw)
+    if src_bad:
         client.chat_postMessage(
             channel=requester_id,
             text=(
-                f":no_entry: Request *{name}* rejected (no PR created):\n"
-                + "\n".join(f"• {b}" for b in (src_bad + dst_bad))
-                + "\n_Use `/fw-address` or "
-                "`name=IP prefix=32 zone=ch expire=90` for new objects._"
+                ":no_entry: Request rejected (no PR created): could not resolve "
+                f"source `{src_bad[0]}`. Please run `/fw-policy` again."
             ),
         )
         return
-    srcaddr, dstaddr = src_names, dst_names
-    new_addresses = src_new + dst_new
+    dstaddr, dst_bad = _names_for_side(dstaddr_raw)
+    if dst_bad:
+        client.chat_postMessage(
+            channel=requester_id,
+            text=(
+                ":no_entry: Request rejected (no PR created): could not resolve "
+                f"destination `{dst_bad[0]}`. Please run `/fw-policy` again."
+            ),
+        )
+        return
+
+    new_addresses = inline_new + wizard_new
+    seen_addr_names: set[str] = set()
+    deduped_addresses: list[dict] = []
+    for a in new_addresses:
+        n = a.get("name")
+        if n and n not in seen_addr_names:
+            deduped_addresses.append(a)
+            seen_addr_names.add(n)
+    new_addresses = deduped_addresses
     merged_addr_objs = addr_objs + new_addresses
 
     try:
         svc_objs = fetch_repo_yaml("policies/services.yaml").get("services", [])
-        builtin = set(
-            (rules or fetch_repo_yaml("config/policy_rules.yaml")).get(
-                "allowed_builtin_services", []
-            )
-        )
+        builtin = set((rules or {}).get("allowed_builtin_services", []))
     except Exception as exc:
-        log.error("service catalog lookup failed:\n%s", traceback.format_exc())
         client.chat_postMessage(
             channel=requester_id,
             text=f":x: Could not read services.yaml: `{exc}`",
@@ -366,8 +485,7 @@ def handle_submission(ack, body, view, client):
             channel=requester_id,
             text=(
                 f":no_entry: Request *{name}* rejected (no PR created): "
-                f"{bad} is not a known service, built-in, or port "
-                f"(e.g. `8443`, `tcp/9000`, `my-svc=tcp/8443`)."
+                f"{bad} is not a known service, built-in, or port."
             ),
         )
         return
@@ -375,9 +493,6 @@ def handle_submission(ack, body, view, client):
     new_services = svc_new
     merged_svc_objs = svc_objs + new_services
 
-    # Auto-detect EVERY firewall the traffic transits (it may pass through
-    # several in series; each needs its own allow policy). If none is on the
-    # path, reject up front with a helpful message.
     try:
         targets = _select_targets(srcaddr, dstaddr, merged_addr_objs)
     except Exception as exc:
@@ -393,16 +508,12 @@ def handle_submission(ack, body, view, client):
             channel=requester_id,
             text=(
                 f":no_entry: Request *{name}* rejected (no PR created): no "
-                "firewall is on the path between the source and destination.\n"
-                "_No device in `config/devices.yaml` routes between these "
-                "endpoints (src and dst must transit a firewall)._"
+                "firewall is on the path between the source and destination."
             ),
         )
         return
 
     naming = load_naming_config(rules)
-
-    # One policy per transit firewall; name = {center}{zone}{src}>{center}{zone}{dst}
     policies = [
         {
             "name": build_policy_name(
@@ -425,29 +536,22 @@ def handle_submission(ack, body, view, client):
         }
         for t in targets
     ]
-    name = request_summary_name(srcaddr, dstaddr, merged_addr_objs)
+    name = request_summary_name(srcaddr, dstaddr, merged_addr_objs, naming)
 
-    # Validate BEFORE opening a PR
-    # requests (e.g. referencing undefined address objects) are rejected up
-    # front instead of failing later in the apply workflow.
     try:
         errors = _validate_request(policies, merged_addr_objs, merged_svc_objs)
     except Exception as exc:
         log.error("request validation lookup failed:\n%s", traceback.format_exc())
-        errors = []  # fail open to PR; CI will still catch issues
+        errors = []
         client.chat_postMessage(
             channel=requester_id,
             text=f":warning: Could not pre-validate (CI will still check): `{exc}`",
         )
     if errors:
-        log.info("Rejected request %s: %s", name, errors)
         bullet = "\n".join(f"• {e}" for e in errors)
         client.chat_postMessage(
             channel=requester_id,
-            text=(
-                f":no_entry: Request *{name}* rejected (no PR created):\n"
-                f"{bullet}"
-            ),
+            text=f":no_entry: Request *{name}* rejected (no PR created):\n{bullet}",
         )
         return
 
@@ -462,7 +566,7 @@ def handle_submission(ack, body, view, client):
             requester_slack_id=requester_id,
         )
         log.info("Opened PR #%s for %s (%d firewall(s))", pr["number"], name, len(policies))
-    except Exception as exc:  # GitHub failure (repo/token/branch) — tell requester
+    except Exception as exc:
         log.error("open_policy_pr failed:\n%s", traceback.format_exc())
         client.chat_postMessage(
             channel=requester_id,
@@ -504,15 +608,248 @@ def handle_submission(ack, body, view, client):
                 f"{logtraffic_summary(policies)}"
             ),
         )
-    except Exception as exc:  # Slack post failure (e.g. not_in_channel)
-        log.error("chat_postMessage to %s failed:\n%s", channel, traceback.format_exc())
+    except Exception as exc:
+        log.error("chat_postMessage failed:\n%s", traceback.format_exc())
         client.chat_postMessage(
             channel=requester_id,
             text=(
-                f":warning: PR #{pr['number']} was created, but I couldn't post "
-                f"to `{channel}`: `{exc}`. Is the bot invited to that channel?"
+                f":warning: PR #{pr['number']} was created, but posting to "
+                f"`{channel}` failed: `{exc}`"
             ),
         )
+
+
+@app.view("fw_policy_submit")
+def handle_submission(ack, body, view, client):
+    values = view["state"]["values"]
+
+    def field(block_id: str) -> str:
+        return values[block_id]["value"]["value"].strip()
+
+    requester_id = body["user"]["id"]
+    requester = body["user"]["username"]
+    requester_real = body["user"].get("name") or requester
+    team_name = (body.get("team") or {}).get("domain") or ""
+    justification = field("justification")
+
+    name = "pending"  # replaced after route + naming
+    srcaddr = _split(field("srcaddr"))
+    dstaddr = _split(field("dstaddr"))
+    service = _split(field("service"))
+    valid_days_raw = field("valid_days")
+
+    try:
+        rules = fetch_repo_yaml("config/policy_rules.yaml")
+    except Exception:
+        rules = {}
+
+    expires_at, valid_errors = _parse_valid_days(valid_days_raw, rules)
+    if valid_errors:
+        ack()
+        client.chat_postMessage(
+            channel=requester_id,
+            text=(
+                f":no_entry: Request *{name}* rejected (no PR created):\n"
+                + "\n".join(f"• {e}" for e in valid_errors)
+            ),
+        )
+        return
+
+    try:
+        addr_objs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
+    except Exception as exc:
+        ack()
+        client.chat_postMessage(
+            channel=requester_id,
+            text=f":x: Could not read the address book: `{exc}`",
+        )
+        return
+
+    autocomment = f"Auto-created from Slack request by {requester}"
+    _, src_new, src_need = classify_address_tokens(
+        srcaddr, addr_objs, autocomment, rules=rules
+    )
+    _, dst_new, dst_need = classify_address_tokens(
+        dstaddr, addr_objs + src_new, autocomment, rules=rules
+    )
+
+    need_form: list[str] = []
+    for t in src_need + dst_need:
+        if t not in need_form:
+            need_form.append(t)
+
+    if need_form:
+        pending = {
+            "requester_id": requester_id,
+            "requester": requester,
+            "requester_real": requester_real,
+            "team_name": team_name,
+            "justification": justification,
+            "srcaddr_raw": srcaddr,
+            "dstaddr_raw": dstaddr,
+            "service": service,
+            "valid_days_raw": valid_days_raw,
+            "inline_new": src_new + dst_new,
+            "queue": need_form,
+            "created": [],
+            "token_map": {},
+            "total_steps": len(need_form),
+        }
+        token = need_form[0]
+        defaults = suggest_address_defaults(token)
+        try:
+            ack(
+                response_action="update",
+                view=_policy_address_step_modal(
+                    pending,
+                    token,
+                    step=1,
+                    total=len(need_form),
+                    defaults=defaults,
+                    valid_days_default=valid_days_raw or "90",
+                    comments_default=justification,
+                ),
+            )
+        except Exception as exc:
+            log.error("address wizard views update failed:\n%s", traceback.format_exc())
+            ack()
+            client.chat_postMessage(
+                channel=requester_id,
+                text=(
+                    f":x: Could not open address form: `{exc}`\n"
+                    "Fill in zone on the next screen, or use `/fw-address` first."
+                ),
+            )
+        return
+
+    ack()
+    _finalize_policy_request(
+        client,
+        {
+            "requester_id": requester_id,
+            "requester": requester,
+            "requester_real": requester_real,
+            "team_name": team_name,
+            "justification": justification,
+            "srcaddr_raw": srcaddr,
+            "dstaddr_raw": dstaddr,
+            "service": service,
+            "valid_days_raw": valid_days_raw,
+            "inline_new": src_new + dst_new,
+            "created": [],
+            "token_map": {},
+        },
+    )
+
+
+@app.view("fw_policy_address_step")
+def handle_policy_address_step(ack, body, view, client):
+    pending = _unpack_pending(view.get("private_metadata") or "")
+    if not pending:
+        ack()
+        client.chat_postMessage(
+            channel=body["user"]["id"],
+            text=(
+                ":x: Could not restore policy wizard state — "
+                "please submit `/fw-policy` again."
+            ),
+        )
+        return
+
+    values = view["state"]["values"]
+
+    def field(block_id: str) -> str:
+        return values[block_id]["value"]["value"].strip()
+
+    requester_id = body["user"]["id"]
+    requester = body["user"]["username"]
+    queue = pending.get("queue") or []
+    if not queue:
+        ack()
+        _finalize_policy_request(client, pending)
+        return
+
+    token = queue[0]
+    obj_name = field("name")
+    address = field("address")
+    prefix = field("prefix") or "32"
+    zone = field("zone")
+    valid_days_raw = field("valid_days") or pending.get("valid_days_raw", "90")
+    addr_comment = field("justification") or pending.get("justification", "")
+
+    try:
+        rules = fetch_repo_yaml("config/policy_rules.yaml")
+    except Exception:
+        rules = {}
+
+    expires_at, valid_errors = _parse_valid_days(valid_days_raw, rules)
+    if valid_errors:
+        ack(
+            response_action="errors",
+            errors={"zone": valid_errors[0][:150]},
+        )
+        return
+
+    try:
+        addr_objs = fetch_repo_yaml("policies/addresses.yaml").get("addresses", [])
+    except Exception:
+        addr_objs = []
+
+    taken = {a.get("name") for a in addr_objs if a.get("name")}
+    for a in (pending.get("inline_new") or []) + (pending.get("created") or []):
+        if a.get("name"):
+            taken.add(a["name"])
+
+    comment = addr_comment or f"Auto-created for policy by {requester}"
+    new_obj, build_errors = build_address_object(
+        name=obj_name,
+        address=address,
+        prefix=prefix,
+        zone=zone,
+        expires_at=expires_at,
+        comment=comment,
+        taken=taken,
+        rules=rules,
+    )
+    if build_errors or new_obj is None:
+        ack(
+            response_action="errors",
+            errors={"zone": (build_errors or ["invalid address"])[0][:150]},
+        )
+        return
+
+    try:
+        Address(**new_obj)
+    except Exception as exc:
+        ack(response_action="errors", errors={"name": str(exc)[:150]})
+        return
+
+    pending.setdefault("created", []).append(new_obj)
+    pending.setdefault("token_map", {})[token] = new_obj["name"]
+    queue.pop(0)
+    pending["queue"] = queue
+
+    if queue:
+        next_token = queue[0]
+        step = len(pending.get("created", [])) + 1
+        total = pending.get("total_steps", step + len(queue) - 1)
+        defaults = suggest_address_defaults(next_token)
+        ack(
+            response_action="update",
+            view=_policy_address_step_modal(
+                pending,
+                next_token,
+                step=step,
+                total=total,
+                defaults=defaults,
+                valid_days_default=pending.get("valid_days_raw", "90"),
+                comments_default=pending.get("justification", ""),
+            ),
+        )
+        return
+
+    ack()
+    _finalize_policy_request(client, pending)
 
 
 @app.view("fw_address_submit")

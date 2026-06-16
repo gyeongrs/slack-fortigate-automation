@@ -73,7 +73,7 @@ require:
   schedule: always
 
 # Temporary policies: expires_at in firewall_policies.yaml (YYYY-MM-DD).
-# Slack /fw-request defaults to default_valid_days; a one-time FortiGate
+# Slack /fw-policy defaults to default_valid_days; a one-time FortiGate
 # schedule is created on apply. Daily CI posts Slack alerts before expiry.
 expiry:
   default_valid_days: 90
@@ -84,8 +84,9 @@ expiry:
 # (a tripwire against accidental mass changes).
 max_changes_per_apply: 10
 
-# Policy prefix = center_code + zone_code (any short string — not limited to A/B/C)
-#   dc1-core-fw  →  D1 + CR  →  D1CR10.50.1.1>D1CR10.51.10.1
+# Policy name = {center}{zone}-{src_ip}>{center}{zone}-{dst_ip} (addresses.yaml)
+#   NEF-10.54.20.20 (dc1/inet) → Azure-10.56.10.1 (dc1/svr)
+#   → dc1inet-10.54.20.20>dc1svr-10.56.10.1
 policy_naming:
   center_map:        # datacenter / site (1st segment) — 편한 코드로 자유롭게
     dc1: D1

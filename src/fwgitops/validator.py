@@ -93,18 +93,27 @@ def _check_references(state: DesiredState, rules: dict) -> list[str]:
 
 def _check_duplicates(state: DesiredState) -> list[str]:
     """Names are the match key for the engine, so duplicates would cause one
-    object to silently overwrite another."""
+    object to silently overwrite another. Policy names are scoped per device."""
     errs: list[str] = []
     for kind, items in (
         ("address", state.addresses),
         ("service", state.services),
         ("policy", state.policies),
     ):
-        seen: set[str] = set()
+        seen: set[str | tuple[str, str]] = set()
         for obj in items:
-            if obj.name in seen:
-                errs.append(f"duplicate {kind} name '{obj.name}'.")
-            seen.add(obj.name)
+            if kind == "policy":
+                key: str | tuple[str, str] = (obj.device or "", obj.name)
+            else:
+                key = obj.name
+            if key in seen:
+                if kind == "policy":
+                    _dev, pname = key  # type: ignore[misc]
+                    loc = f" on device '{_dev}'" if _dev else ""
+                    errs.append(f"duplicate policy name '{pname}'{loc}.")
+                else:
+                    errs.append(f"duplicate {kind} name '{obj.name}'.")
+            seen.add(key)
     return errs
 
 

@@ -1,12 +1,16 @@
-"""Auto-generate FortiGate policy names from device + endpoint IPs.
+"""Auto-generate FortiGate policy names from address object center/zone + IP.
 
-Inventory device names use ``{center}-{zone}-fw`` (e.g. ``dc1-core-fw``):
-  - ``dc1``  → center code from ``center_map``  (any short string you like)
-  - ``core`` → zone code from ``zone_map``
-  - prefix   → ``{center_code}{zone_code}``  e.g. ``D1`` + ``CR`` → ``D1CR``
+Each address in ``addresses.yaml`` carries GitOps-only ``center`` and ``zone``.
+Policy names describe the traffic flow:
 
-Policy name: ``{prefix}{src_ip}>{prefix}{dst_ip}``
-e.g. ``D1CR10.50.1.1>D1CR10.51.10.1`` (FortiGate name max 35 chars — keep codes short).
+  ``{center}{zone}-{src_ip}>{center}{zone}-{dst_ip}``
+
+Example (NEF-10.54.20.20 dc1/inet → Azure-10.56.10.1 dc1/svr):
+
+  ``dc1inet-10.54.20.20>dc1svr-10.56.10.1``
+
+Uses the raw ``center`` / ``zone`` keys from the address object (not
+``center_map`` / ``zone_map`` abbreviations). Same name on every transit FW.
 """
 
 from __future__ import annotations
@@ -43,12 +47,10 @@ def _lookup_code(key: str | None, mapping: dict, fallback: str) -> str:
         return fallback
     if key in mapping:
         return str(mapping[key])
-    # Not mapped: use up to 2 chars from the segment name (e.g. ch → CH)
     return key[:_DEFAULT_CODE_LEN].upper()
 
 
-def device_prefix(device_name: str, naming: dict) -> str:
-    """Prefix = center code + zone code (both configurable, not limited to A/B)."""
+def _center_zone_codes(center: str | None, zone: str | None, naming: dict) -> str:
     center_map = naming.get("center_map") or {}
     zone_map = naming.get("zone_map") or {}
     default_center = str(
@@ -62,14 +64,47 @@ def device_prefix(device_name: str, naming: dict) -> str:
         center_map = legacy
         zone_map = legacy
 
-    center, zone = parse_device_segments(device_name)
     center_code = _lookup_code(center, center_map, default_center)
     zone_code = _lookup_code(zone, zone_map, "ZZ")
     return f"{center_code}{zone_code}"
 
 
+def device_prefix(device_name: str, naming: dict) -> str:
+    """Prefix from firewall inventory name (``dc1-core-fw`` → ``D1CR``)."""
+    center, zone = parse_device_segments(device_name)
+    return _center_zone_codes(center, zone, naming)
+
+
+def _find_address(addr_name: str, addr_objs: list[dict]) -> dict | None:
+    for obj in addr_objs:
+        if obj.get("name") == addr_name:
+            return obj
+    return None
+
+
+def address_flow_segment(addr_name: str, addr_objs: list[dict]) -> str:
+    """``{center}{zone}-{ip}`` from ``addresses.yaml`` labels + endpoint IP."""
+    ip = endpoint_token(addr_name, addr_objs)
+    obj = _find_address(addr_name, addr_objs)
+    if obj is not None:
+        center = str(obj.get("center") or "").strip().lower()
+        zone = str(obj.get("zone") or "").strip().lower()
+        if center or zone:
+            return f"{center}{zone}-{ip}"
+    return ip or "?"
+
+
+def address_prefix(addr_name: str, addr_objs: list[dict], naming: dict) -> str:
+    """Legacy alias — prefer ``address_flow_segment`` for policy names."""
+    _ = naming
+    seg = address_flow_segment(addr_name, addr_objs)
+    if "-" in seg:
+        return seg.split("-", 1)[0]
+    return seg
+
+
 def endpoint_token(name: str, addr_objs: list[dict]) -> str:
-    """Dotted IP (or FQDN slug) used inside an auto-generated policy name."""
+    """Dotted IP (or FQDN slug) — used in Slack summaries, not policy names."""
     for obj in addr_objs:
         if obj.get("name") != name:
             continue
@@ -93,10 +128,11 @@ def build_policy_name(
     addr_objs: list[dict],
     naming: dict,
 ) -> str:
-    prefix = device_prefix(device, naming)
-    src = endpoint_token(src_names[0], addr_objs) if src_names else "?"
-    dst = endpoint_token(dst_names[0], addr_objs) if dst_names else "?"
-    name = f"{prefix}{src}>{prefix}{dst}"
+    """Flow name: ``dc1inet-10.54.20.20>dc1svr-10.56.10.1``."""
+    _ = device, naming
+    src = address_flow_segment(src_names[0], addr_objs) if src_names else "?"
+    dst = address_flow_segment(dst_names[0], addr_objs) if dst_names else "?"
+    name = f"{src}>{dst}"
     if len(name) > _FORTIGATE_NAME_MAX:
         name = name[:_FORTIGATE_NAME_MAX]
     return name
@@ -106,8 +142,8 @@ def request_summary_name(
     src_names: list[str],
     dst_names: list[str],
     addr_objs: list[dict],
+    naming: dict | None = None,
 ) -> str:
-    """PR title / Slack summary when several firewalls share one request."""
-    src = endpoint_token(src_names[0], addr_objs) if src_names else "?"
-    dst = endpoint_token(dst_names[0], addr_objs) if dst_names else "?"
-    return f"{src}>{dst}"
+    """PR title / Slack summary — same flow label as the policy name."""
+    naming = naming or {}
+    return build_policy_name("", src_names, dst_names, addr_objs, naming)

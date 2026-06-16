@@ -1,4 +1,5 @@
 from fwgitops.policy_naming import (
+    address_flow_segment,
     build_policy_name,
     device_prefix,
     parse_device_segments,
@@ -6,13 +7,25 @@ from fwgitops.policy_naming import (
 )
 
 _ADDR = [
-    {"name": "src-host", "type": "ipmask", "subnet": "10.50.1.1/32"},
-    {"name": "dst-host", "type": "ipmask", "subnet": "10.51.10.1/32"},
+    {
+        "name": "NEF-10.54.20.20",
+        "type": "ipmask",
+        "subnet": "10.54.20.20/32",
+        "center": "dc1",
+        "zone": "inet",
+    },
+    {
+        "name": "Azure-10.56.10.1",
+        "type": "ipmask",
+        "subnet": "10.56.10.1/32",
+        "center": "dc1",
+        "zone": "svr",
+    },
 ]
 
 _NAMING = {
     "center_map": {"dc1": "D1", "dc2": "D2"},
-    "zone_map": {"core": "cr", "ch": "ch"},
+    "zone_map": {"core": "CR", "inet": "IN", "ch": "CH", "svr": "SV"},
     "default_center_code": "00",
 }
 
@@ -23,42 +36,54 @@ def test_parse_device_segments():
 
 
 def test_device_prefix_center_plus_zone():
-    assert device_prefix("dc1-core-fw", _NAMING) == "D1cr"
+    assert device_prefix("dc1-core-fw", _NAMING) == "D1CR"
 
 
-def test_device_prefix_custom_codes():
-    naming = {
-        "center_map": {"dc1": "Centers"},
-        "zone_map": {"core": "Security Zone"},
-    }
-    assert device_prefix("dc1-core-fw", naming) == "CentersSecurity Zone"
+def test_address_flow_segment():
+    assert address_flow_segment("NEF-10.54.20.20", _ADDR) == "dc1inet-10.54.20.20"
+    assert address_flow_segment("Azure-10.56.10.1", _ADDR) == "dc1svr-10.56.10.1"
 
 
-def test_device_prefix_zone_only_uses_default_center():
-    assert device_prefix("ch-fw", _NAMING) == "00ch"
-
-
-def test_build_policy_name_example():
+def test_build_policy_name_flow_based():
     name = build_policy_name(
-        "dc1-core-fw",
-        ["src-host"],
-        ["dst-host"],
+        "dc1-inet-fw",
+        ["NEF-10.54.20.20"],
+        ["Azure-10.56.10.1"],
         _ADDR,
         _NAMING,
     )
-    assert name == "D1cr10.50.1.1>D1cr10.51.10.1"
+    assert name == "dc1inet-10.54.20.20>dc1svr-10.56.10"
 
 
-def test_build_policy_name_from_raw_ip():
-    name = build_policy_name(
-        "dc1-core-fw",
-        ["10.50.1.1/32"],
-        ["10.51.10.1"],
+def test_build_policy_name_same_on_every_transit_fw():
+    inet = build_policy_name(
+        "dc1-inet-fw",
+        ["NEF-10.54.20.20"],
+        ["Azure-10.56.10.1"],
         _ADDR,
         _NAMING,
     )
-    assert name == "D1cr10.50.1.1>D1cr10.51.10.1"
+    svr = build_policy_name(
+        "dc1-svr-fw",
+        ["NEF-10.54.20.20"],
+        ["Azure-10.56.10.1"],
+        _ADDR,
+        _NAMING,
+    )
+    assert inet == svr == "dc1inet-10.54.20.20>dc1svr-10.56.10"
 
 
-def test_request_summary_name():
-    assert request_summary_name(["src-host"], ["dst-host"], _ADDR) == "10.50.1.1>10.51.10.1"
+def test_request_summary_name_matches_policy_name():
+    assert (
+        request_summary_name(
+            ["NEF-10.54.20.20"],
+            ["Azure-10.56.10.1"],
+            _ADDR,
+            _NAMING,
+        )
+        == "dc1inet-10.54.20.20>dc1svr-10.56.10"
+    )
+
+
+def test_address_flow_segment_without_labels_uses_ip_only():
+    assert address_flow_segment("unknown-host", _ADDR) == "unknown-host"

@@ -80,3 +80,16 @@ def test_undefined_service_is_rejected():
 def test_duplicate_policy_name_is_rejected():
     errors = validate(_state([_policy(name="dup"), _policy(name="dup")]), RULES)
     assert any("duplicate policy name 'dup'" in e for e in errors)
+
+
+def test_same_policy_name_on_different_devices_is_ok():
+    errors = validate(
+        _state(
+            [
+                _policy(name="dc1svr-10.56.10.10>dc1ch-10.51.10.1", device="dc1-svr-fw"),
+                _policy(name="dc1svr-10.56.10.10>dc1ch-10.51.10.1", device="dc1-ch-fw"),
+            ]
+        ),
+        RULES,
+    )
+    assert not any("duplicate policy" in e for e in errors)
