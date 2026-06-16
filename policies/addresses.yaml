@@ -55,3 +55,11 @@ addresses:
   type: ipmask
   subnet: 10.56.1.1/32
   comment: Auto-created from Slack request by gyeongrs
+- name: auto-10.51.10.10
+  type: ipmask
+  subnet: 10.51.10.10/32
+  comment: Auto-created from Slack request by gyeongrs
+- name: auto-10.56.10.10
+  type: ipmask
+  subnet: 10.56.10.10/32
+  comment: Auto-created from Slack request by gyeongrs
