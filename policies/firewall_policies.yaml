@@ -64,3 +64,40 @@ policies:
   logtraffic: all
   status: enable
   comment: 'Corp clients to external partner (expect target: exco-fw)'
+- name: dc1svr-10.56.10.10>dc1ch-10.51.10.1
+  device: dc1-ch-fw
+  srcintf:
+  - ch-untrust
+  dstintf:
+  - ch-trust
+  srcaddr: &id001
+  - SVR-10.56.10.10
+  dstaddr: &id002
+  - 10.51.10.10
+  service: &id003
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [dc1-ch-fw]
+- name: dc1svr-10.56.10.10>dc1ch-10.51.10.1
+  device: dc1-svr-fw
+  srcintf:
+  - svr-trust
+  dstintf:
+  - svr-untrust
+  srcaddr: *id001
+  dstaddr: *id002
+  service: *id003
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (test) [dc1-svr-fw]
