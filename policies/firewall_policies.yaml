@@ -336,3 +336,40 @@ policies:
   requester: gyeongrs
   requester_slack_id: U0B85045KGD
   comment: Requested by gyeongrs (test) [vdi-fw]
+- name: 00CH10.51.10.10>00CH10.56.10.10
+  device: ch-fw
+  srcintf:
+  - ch-trust
+  dstintf:
+  - ch-untrust
+  srcaddr: &id016
+  - auto-10.51.10.10
+  dstaddr: &id017
+  - auto-10.56.10.10
+  service: &id018
+  - HTTPS
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (開発用) [ch-fw]
+- name: 00SV10.51.10.10>00SV10.56.10.10
+  device: svr-fw
+  srcintf:
+  - svr-untrust
+  dstintf:
+  - svr-trust
+  srcaddr: *id016
+  dstaddr: *id017
+  service: *id018
+  action: accept
+  schedule: always
+  logtraffic: all
+  status: enable
+  expires_at: '2026-06-17'
+  requester: gyeongrs
+  requester_slack_id: U0B85045KGD
+  comment: Requested by gyeongrs (開発用) [svr-fw]
