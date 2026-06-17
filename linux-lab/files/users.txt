@@ -1,0 +1,5 @@
+alice:engineering:active
+bob:sales:active
+charlie:engineering:inactive
+diana:hr:active
+eve:sales:active

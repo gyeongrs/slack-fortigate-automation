@@ -1,0 +1,3 @@
+[장애 티켓 INC-2026-0612-CPU]
+증상: 웹 서버 CPU 100% — 응답 지연
+힌트: runaway 프로세스 PID 파일 → /workspace/linux-lab/scenarios/04-process-incident/runaway.pid
