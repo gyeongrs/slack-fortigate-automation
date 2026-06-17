@@ -1,23 +1,23 @@
-# 시나리오 05: cron 백업 실패
+# シナリオ 05: cron バックアップ失敗
 
-## 실무 배경
+## 実務背景
 
-매일 02:00 **백업 job**이 실패. `backup/` 디렉터리가 비어 있습니다.
+毎日 02:00 の **バックアップ job** が失敗。`backup/` ディレクトリが空です。
 
-## 증상
+## 症状
 
 - `logs/backup.log`: `ERROR: backp.sh not found`
-- `crontab.broken`에 **오타** 있는 cron 항목
-- `data/records.txt`는 존재하나 backup/ 에 복사 안 됨
+- `crontab.broken` に **typo** がある cron エントリ
+- `data/records.txt` は存在するが backup/ にコピーされていない
 
-## 미션
+## ミッション
 
-1. `logs/backup.log`에서 **실패 원인** 확인
-2. `crontab.broken`의 **경로 오타** 수정 (`backp.sh` → `backup.sh`)
-3. `scripts/backup.sh` **수동 실행**
-4. `backup/records.txt` 생성 및 log에 `OK backup completed` 확인
+1. `logs/backup.log` で **失敗原因** を確認
+2. `crontab.broken` の **パス typo** を修正（`backp.sh` → `backup.sh`）
+3. `scripts/backup.sh` を **手動実行**
+4. `backup/records.txt` 作成と log に `OK backup completed` があることを確認
 
-## 힌트
+## ヒント
 
 ```bash
 cd /workspace/linux-lab/scenarios/05-cron-failure
@@ -26,28 +26,28 @@ cat logs/backup.log
 cat crontab.broken
 cat scripts/backup.sh
 
-# 오타 수정 (편집기)
+# typo 修正（エディタ）
 nano crontab.broken
 
-# 수동 백업
+# 手動バックアップ
 bash scripts/backup.sh
 cat logs/backup.log
 ls -la backup/
 ```
 
-## 완료 확인
+## 完了確認
 
 ```bash
 cd /workspace/linux-lab
 ./check.sh 05
 ```
 
-## 실무 연결
+## 実務との関連
 
-- cron 로그: `/var/log/syslog` 또는 `journalctl -u cron`
-- `MAILTO=` 설정으로 실패 알림
-- 절대경로 사용, 스크립트 `chmod +x`
+- cron ログ: `/var/log/syslog` または `journalctl -u cron`
+- `MAILTO=` 設定で失敗通知
+- 絶対パス使用、スクリプト `chmod +x`
 
-## 정답
+## 解答
 
 [SOLUTION.md](SOLUTION.md)

@@ -1,0 +1,2 @@
+ALERT: /var/log usage above 85% threshold
+Action required: identify large files and clean up old logs

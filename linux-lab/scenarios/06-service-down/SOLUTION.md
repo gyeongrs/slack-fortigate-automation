@@ -1,6 +1,6 @@
-# 시나리오 06 — 해설
+# シナリオ 06 — 解説
 
-## 방법 A: Python mock (권장 — nc 없어도 됨)
+## 方法 A: Python mock（推奨 — nc 不要）
 
 ```bash
 cd /workspace/linux-lab/scenarios/06-service-down
@@ -21,27 +21,27 @@ sleep 1
 ss -tln | grep 5432
 ```
 
-## 방법 B: mock-server.sh (nc 필요)
+## 方法 B: mock-server.sh（nc 必要）
 
 ```bash
-sudo apt install -y netcat-openbsd   # 필요 시
+sudo apt install -y netcat-openbsd   # 必要な場合
 nohup ./mock-server.sh > /tmp/mock-db.log 2>&1 &
 ss -tln | grep 5432
 ```
 
-## hosts (선택)
+## hosts（任意）
 
 ```bash
-# db.internal 이름 해석 (sudo 필요할 수 있음)
+# db.internal 名前解決（sudo が必要な場合あり）
 echo "127.0.0.1 db.internal" | sudo tee -a /etc/hosts
 getent hosts db.internal
 ```
 
-## 트러블슈팅 순서 (실무)
+## トラブルシューティング順序（実務）
 
-1. 앱 설정 (host/port)
+1. アプリ設定（host/port）
 2. DNS/hosts
-3. 포트 리스닝 (`ss -tlnp`)
-4. 로컬 연결 (`nc -zv host port`)
-5. 방화벽/ACL
-6. DB 서비스 로그
+3. ポートリッスン（`ss -tlnp`）
+4. ローカル接続（`nc -zv host port`）
+5. ファイアウォール/ACL
+6. DB サービスログ

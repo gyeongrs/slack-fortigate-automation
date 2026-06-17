@@ -1,55 +1,55 @@
-# 시나리오 04: CPU 100% — runaway 프로세스
+# シナリオ 04: CPU 100% — runaway プロセス
 
-## 실무 배경
+## 実務背景
 
-웹 서버 **CPU 100%** 알람. 배치/루프 프로세스가 응답을 막고 있습니다.
+Web サーバー **CPU 100%** アラーム。バッチ/ループプロセスが応答を妨げています。
 
-## 증상
+## 症状
 
-- 시스템 느림
-- `incident.txt` 참고
-- `bin/runaway.sh` — CPU 소모 무한 루프 (의도적)
+- システムが遅い
+- `incident.txt` 参照
+- `bin/runaway.sh` — CPU 消費の無限ループ（意図的）
 
-## 미션
+## ミッション
 
-1. CPU 사용 상위 프로세스 확인 (`ps`, `top`)
-2. `runaway.sh` **PID** 찾기
-3. 프로세스 **종료** (`kill`)
-4. 종료 확인 (`pgrep` 또는 `ps`)
+1. CPU 使用上位プロセスを確認（`ps`, `top`）
+2. `runaway.sh` の **PID** を特定
+3. プロセスを **終了**（`kill`）
+4. 終了を確認（`pgrep` または `ps`）
 
-## 힌트
+## ヒント
 
 ```bash
 cd /workspace/linux-lab/scenarios/04-process-incident
 
-# CPU 순 정렬
+# CPU 順ソート
 ps aux --sort=-%cpu | head -10
 
-# runaway 찾기
+# runaway を探す
 pgrep -af runaway
 
-# PID 파일 참고
+# PID ファイル参照
 cat runaway.pid
 
-# 종료
+# 終了
 kill $(cat runaway.pid)
-# 또는
+# または
 pkill -f runaway.sh
 ```
 
-## 완료 확인
+## 完了確認
 
 ```bash
 cd /workspace/linux-lab
 ./check.sh 04
 ```
 
-## 실무 연결
+## 実務との関連
 
-- `kill -15` (SIGTERM) → 대기 → `kill -9` (SIGKILL)
+- `kill -15` (SIGTERM) → 待機 → `kill -9` (SIGKILL)
 - systemd: `systemctl stop`, `Restart=on-failure`
 - CPU limit: cgroups, ulimit
 
-## 정답
+## 解答
 
 [SOLUTION.md](SOLUTION.md)

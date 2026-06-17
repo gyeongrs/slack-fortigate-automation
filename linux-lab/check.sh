@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 시나리오별 자동 점검
+# シナリオ別自動採点
 set -euo pipefail
 
 LAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +13,7 @@ info() { echo "  [INFO] $1"; }
 check_01() {
   echo "==> 01-log-incident"
   local log="$LAB_ROOT/scenarios/01-log-incident/data/access.log"
-  if [[ ! -f "$log" ]]; then ng "access.log 없음 — ./setup.sh 실행"; return; fi
+  if [[ ! -f "$log" ]]; then ng "access.log がありません — ./setup.sh を実行"; return; fi
 
   local err_ip count_500 top_path
   # log format: TIMESTAMP IP METHOD PATH STATUS LATENCY
@@ -21,14 +21,14 @@ check_01() {
   count_500=$(awk '$5 == 500' "$log" | wc -l)
   top_path=$(awk '$5 == 500 {print $4}' "$log" | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
 
-  [[ "$err_ip" == "10.0.0.99" ]] && ok "500 에러 주범 IP = 10.0.0.99" || ng "500 에러 IP 분석 (정답: 10.0.0.99, 현재: ${err_ip:-none})"
-  [[ "$count_500" -ge 9 ]] && ok "500 에러 ${count_500}건 확인" || ng "500 에러 카운트 (기대 ≥9, 현재: $count_500)"
-  [[ "$top_path" == "/api/users" ]] && ok "최다 500 경로 = /api/users" || ng "500 최다 경로 (정답: /api/users, 현재: ${top_path:-none})"
+  [[ "$err_ip" == "10.0.0.99" ]] && ok "500 エラー主犯 IP = 10.0.0.99" || ng "500 エラー IP 分析 (正解: 10.0.0.99, 現在: ${err_ip:-none})"
+  [[ "$count_500" -ge 9 ]] && ok "500 エラー ${count_500} 件確認" || ng "500 エラーカウント (期待 ≥9, 現在: $count_500)"
+  [[ "$top_path" == "/api/users" ]] && ok "最多 500 パス = /api/users" || ng "500 最多パス (正解: /api/users, 現在: ${top_path:-none})"
 
   if [[ -f "$LAB_ROOT/scenarios/01-log-incident/answer.txt" ]]; then
-    ok "answer.txt 작성됨"
+    ok "answer.txt 作成済み"
   else
-    info "answer.txt 미작성 — TASKS.md 참고 (선택)"
+    info "answer.txt 未作成 — TASKS.md 参照（任意）"
   fi
 }
 
@@ -38,14 +38,14 @@ check_02() {
   local dbenv="$LAB_ROOT/scenarios/02-permissions/app/config/db.env"
   local datadir="$LAB_ROOT/scenarios/02-permissions/app/data"
 
-  [[ -x "$deploy" ]] && ok "deploy.sh 실행 가능" || ng "deploy.sh +x 필요 (chmod +x)"
-  [[ "$(stat -c '%a' "$dbenv" 2>/dev/null)" == "600" ]] && ok "db.env 권한 600" || ng "db.env → chmod 600 (현재: $(stat -c '%a' "$dbenv" 2>/dev/null || echo ?))"
-  [[ "$(stat -c '%a' "$datadir" 2>/dev/null)" == "750" ]] && ok "data/ 권한 750" || ng "data/ → chmod 750 (현재: $(stat -c '%a' "$datadir" 2>/dev/null || echo ?))"
+  [[ -x "$deploy" ]] && ok "deploy.sh 実行可能" || ng "deploy.sh +x が必要 (chmod +x)"
+  [[ "$(stat -c '%a' "$dbenv" 2>/dev/null)" == "600" ]] && ok "db.env 権限 600" || ng "db.env → chmod 600 (現在: $(stat -c '%a' "$dbenv" 2>/dev/null || echo ?))"
+  [[ "$(stat -c '%a' "$datadir" 2>/dev/null)" == "750" ]] && ok "data/ 権限 750" || ng "data/ → chmod 750 (現在: $(stat -c '%a' "$datadir" 2>/dev/null || echo ?))"
 
   if [[ -x "$deploy" ]] && "$deploy" >/dev/null 2>&1; then
-    ok "deploy.sh 실행 성공"
+    ok "deploy.sh 実行成功"
   else
-    ng "deploy.sh 실행 실패"
+    ng "deploy.sh 実行失敗"
   fi
 }
 
@@ -58,13 +58,13 @@ check_03() {
   compressed=$(find "$logdir" -name "*.gz" 2>/dev/null | wc -l)
 
   if [[ "$big_count" -eq 0 ]]; then
-    ok "1MB 초과 파일 정리 완료"
+    ok "1MB 超ファイルの整理完了"
   else
-    ng "대용량 파일 ${big_count}개 남음 — du/find 로 확인 후 삭제 또는 gzip"
+    ng "大容量ファイル ${big_count} 件残存 — du/find で確認後、削除または gzip"
   fi
 
   if [[ "$compressed" -gt 0 ]] || [[ "$big_count" -eq 0 ]]; then
-    ok "디스크 정리 조치 확인"
+    ok "ディスク整理の実施を確認"
   fi
 }
 
@@ -73,9 +73,9 @@ check_04() {
   local running
   running=$(pgrep -f "scenarios/04-process-incident/bin/runaway.sh" 2>/dev/null | wc -l || echo 0)
   if [[ "$running" -eq 0 ]]; then
-    ok "runaway 프로세스 종료됨"
+    ok "runaway プロセス終了済み"
   else
-    ng "runaway 프로세스 ${running}개 실행 중 — ps/pkill 로 종료"
+    ng "runaway プロセス ${running} 件実行中 — ps/pkill で終了"
   fi
 }
 
@@ -87,26 +87,26 @@ check_05() {
   local cron="$LAB_ROOT/scenarios/05-cron-failure/crontab.broken"
 
   if grep -q 'backp\.sh' "$cron" 2>/dev/null; then
-    ng "crontab.broken 경로 오타 미수정 (backp.sh → backup.sh)"
+    ng "crontab.broken パス typo 未修正 (backp.sh → backup.sh)"
   else
-    ok "crontab.broken 경로 수정됨"
+    ok "crontab.broken パス修正済み"
   fi
 
   if [[ -f "$backup_dir/records.txt" ]]; then
-    ok "백업 파일 존재"
+    ok "バックアップファイル存在"
   else
-    info "백업 미실행 — $script 수동 실행 후 재점검"
+    info "バックアップ未実行 — $script を手動実行後、再採点"
     if bash "$script" 2>/dev/null && [[ -f "$backup_dir/records.txt" ]]; then
-      ok "backup.sh 수동 실행 성공"
+      ok "backup.sh 手動実行成功"
     else
-      ng "backup.sh 실행 필요"
+      ng "backup.sh の実行が必要"
     fi
   fi
 
   if grep -q "OK backup completed" "$log" 2>/dev/null; then
-    ok "backup.log 성공 기록"
+    ok "backup.log に成功記録"
   else
-    ng "backup.log 에 OK 기록 없음"
+    ng "backup.log に OK 記録なし"
   fi
 }
 
@@ -119,15 +119,15 @@ check_06() {
     listening=1
   fi
   if [[ "$listening" -gt 0 ]]; then
-    ok "5432 포트 리스닝 중"
+    ok "5432 ポートでリッスン中"
   else
-    ng "5432 미리스닝 — mock-server.sh 백그라운드 실행 필요"
+    ng "5432 未リッスン — mock-server.sh をバックグラウンド実行が必要"
   fi
 
   if getent hosts db.internal >/dev/null 2>&1 || grep -q 'db.internal' /etc/hosts 2>/dev/null; then
-    ok "db.internal 호스트 해석 가능"
+    ok "db.internal ホスト名解決可能"
   else
-    info "db.internal 미등록 — /etc/hosts 추가 또는 nc 127.0.0.1 5432 로 테스트"
+    info "db.internal 未登録 — /etc/hosts 追加または nc 127.0.0.1 5432 でテスト"
   fi
 }
 
@@ -139,11 +139,11 @@ run_one() {
     04|4) check_04 ;;
     05|5) check_05 ;;
     06|6) check_06 ;;
-    *) echo "Unknown scenario: $1"; exit 1 ;;
+    *) echo "不明なシナリオ: $1"; exit 1 ;;
   esac
 }
 
-echo "Linux Lab 점검"
+echo "Linux Lab 採点"
 echo "=============="
 
 if [[ $# -eq 0 ]]; then

@@ -1,27 +1,27 @@
-# 시나리오 05 — 해설
+# シナリオ 05 — 解説
 
 ```bash
 cd /workspace/linux-lab/scenarios/05-cron-failure
 
-# 원인: backp.sh 오타
+# 原因: backp.sh の typo
 sed -i 's/backp\.sh/backup.sh/' crontab.broken
 cat crontab.broken
 
-# 백업 실행
+# バックアップ実行
 bash scripts/backup.sh
 cat logs/backup.log
 ls backup/
 ```
 
-## crontab.broken 수정 후
+## crontab.broken 修正後
 
 ```
 0 2 * * * /workspace/linux-lab/scenarios/05-cron-failure/scripts/backup.sh
 ```
 
-## 실무 cron 체크리스트
+## 実務 cron チェックリスト
 
-- [ ] 절대 경로
-- [ ] 실행 권한
-- [ ] 로그 리다이렉션 `>> /var/log/backup.log 2>&1`
-- [ ] 실패 시 알림
+- [ ] 絶対パス
+- [ ] 実行権限
+- [ ] ログリダイレクト `>> /var/log/backup.log 2>&1`
+- [ ] 失敗時の通知

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Linux 실습 환경 초기화 — 장애 상태를 시나리오별로 생성합니다.
+# Linux 演習環境の初期化 — シナリオごとに障害状態を生成します
 set -euo pipefail
 
 LAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$LAB_ROOT"
 
-echo "==> Linux Lab 초기화 중..."
+echo "==> Linux Lab 初期化中..."
 
-# ── 공통 데이터 ──────────────────────────────────────────────
+# ── 共通データ ──────────────────────────────────────────────
 mkdir -p shared/{logs,data,tmp}
 
 cat > shared/logs/access.log << 'EOF'
@@ -50,19 +50,19 @@ id,name,team,status
 4,diana,hr,active
 EOF
 
-# ── 01 로그 분석 ─────────────────────────────────────────────
+# ── 01 ログ分析 ─────────────────────────────────────────────
 S01="$LAB_ROOT/scenarios/01-log-incident"
 mkdir -p "$S01/data"
 cp shared/logs/access.log "$S01/data/access.log"
 cp shared/logs/app.log "$S01/data/app.log"
 cat > "$S01/data/incident.txt" << 'EOF'
-[장애 티켓 INC-2026-0612]
-증상: 09:00경 API 응답 지연 및 500 에러 급증
-영향: /api/users, /api/orders 엔드포인트
-담당: on-call 엔지니어 (당신)
+[障害チケット INC-2026-0612]
+症状: 09:00頃 API 応答遅延および 500 エラー急増
+影響: /api/users, /api/orders エンドポイント
+担当: オンコールエンジニア（あなた）
 EOF
 
-# ── 02 권한 문제 ─────────────────────────────────────────────
+# ── 02 権限問題 ─────────────────────────────────────────────
 S02="$LAB_ROOT/scenarios/02-permissions"
 mkdir -p "$S02/app/"{bin,config,data}
 cat > "$S02/app/bin/deploy.sh" << 'EOF'
@@ -75,18 +75,18 @@ DB_USER=appuser
 DB_PASS=SuperSecret123!
 EOF
 echo "production data" > "$S02/app/data/records.db"
-chmod 644 "$S02/app/bin/deploy.sh"      # 실행 권한 없음 (장애)
-chmod 644 "$S02/app/config/db.env"      # world-readable (보안 이슈)
-chmod 777 "$S02/app/data"               # 과도한 권한
+chmod 644 "$S02/app/bin/deploy.sh"      # 実行権限なし（障害）
+chmod 644 "$S02/app/config/db.env"      # world-readable（セキュリティ問題）
+chmod 777 "$S02/app/data"               # 過剰な権限
 
-# ── 03 디스크 부족 ───────────────────────────────────────────
+# ── 03 ディスク不足 ───────────────────────────────────────────
 S03="$LAB_ROOT/scenarios/03-disk-full"
 mkdir -p "$S03/var/log/"{nginx,app,archive}
-# 큰 더미 로그 (약 5MB x 3 = 15MB — 실습용)
+# 大きなダミーログ（約 5MB x 3 = 15MB — 演習用）
 for name in nginx/access.log.1 app/app.log.1 app/app.log.2; do
   dd if=/dev/zero bs=1M count=5 of="$S03/var/log/$name" status=none 2>/dev/null
 done
-# 오래된 아카이브
+# 古いアーカイブ
 for i in 1 2 3 4 5; do
   echo "old log chunk $i" > "$S03/var/log/archive/backup-2026-0$i.log"
 done
@@ -95,26 +95,26 @@ ALERT: /var/log usage above 85% threshold
 Action required: identify large files and clean up old logs
 EOF
 
-# ── 04 프로세스 장애 ─────────────────────────────────────────
+# ── 04 プロセス障害 ─────────────────────────────────────────
 S04="$LAB_ROOT/scenarios/04-process-incident"
 mkdir -p "$S04/bin"
 cat > "$S04/bin/runaway.sh" << 'EOF'
 #!/bin/bash
-# CPU 소모 프로세스 (실습용)
+# CPU 消費プロセス（演習用）
 while true; do :; done
 EOF
 chmod +x "$S04/bin/runaway.sh"
-# 기존 runaway 프로세스 정리 후 재시작
+# 既存 runaway プロセスを整理して再起動
 pkill -f "scenarios/04-process-incident/bin/runaway.sh" 2>/dev/null || true
 nohup "$S04/bin/runaway.sh" > /dev/null 2>&1 &
 echo $! > "$S04/runaway.pid"
 cat > "$S04/incident.txt" << EOF
-[장애 티켓 INC-2026-0612-CPU]
-증상: 웹 서버 CPU 100% — 응답 지연
-힌트: runaway 프로세스 PID 파일 → $S04/runaway.pid
+[障害チケット INC-2026-0612-CPU]
+症状: Web サーバー CPU 100% — 応答遅延
+ヒント: runaway プロセス PID ファイル → $S04/runaway.pid
 EOF
 
-# ── 05 cron 백업 실패 ────────────────────────────────────────
+# ── 05 cron バックアップ失敗 ────────────────────────────────────
 S05="$LAB_ROOT/scenarios/05-cron-failure"
 mkdir -p "$S05/"{scripts,logs,backup}
 cat > "$S05/scripts/backup.sh" << 'EOF'
@@ -134,14 +134,14 @@ chmod +x "$S05/scripts/backup.sh"
 mkdir -p "$S05/data"
 echo "important record 1" > "$S05/data/records.txt"
 echo "important record 2" >> "$S05/data/records.txt"
-# 잘못된 cron 항목 (경로 오타)
+# 誤った cron エントリ（パスの typo）
 cat > "$S05/crontab.broken" << 'EOF'
-# 매일 02:00 백업 — 경로 오타로 실패 중
+# 毎日 02:00 バックアップ — パス typo で失敗中
 0 2 * * * /workspace/linux-lab/scenarios/05-cron-failure/scripts/backp.sh
 EOF
 echo "$(date -Iseconds) ERROR: backp.sh not found" > "$S05/logs/backup.log"
 
-# ── 06 서비스 연결 실패 ──────────────────────────────────────
+# ── 06 サービス接続失敗 ──────────────────────────────────────
 S06="$LAB_ROOT/scenarios/06-service-down"
 mkdir -p "$S06/config"
 cat > "$S06/config/app.env" << 'EOF'
@@ -150,21 +150,21 @@ DB_HOST=db.internal
 DB_PORT=5432
 EOF
 cat > "$S06/config/hosts.snippet" << 'EOF'
-# /etc/hosts 에 추가해야 할 항목 (누락됨)
+# /etc/hosts に追加すべき項目（未登録）
 127.0.0.1 db.internal
 EOF
 cat > "$S06/mock-server.sh" << 'EOF'
 #!/bin/bash
-# DB mock — 5432 포트 리스닝 (실습용)
+# DB mock — 5432 ポートでリッスン（演習用）
 while true; do nc -l -p 5432 -q 1 >/dev/null 2>&1; done
 EOF
 chmod +x "$S06/mock-server.sh"
 pkill -f "scenarios/06-service-down/mock-server.sh" 2>/dev/null || true
-# 의도적으로 mock 서버를 시작하지 않음 → 연결 실패 상태
+# 意図的に mock サーバーを起動しない → 接続失敗状態
 cat > "$S06/incident.txt" << 'EOF'
-[장애 티켓 INC-2026-0612-DB]
-증상: app → db.internal:5432 연결 거부 (Connection refused)
-확인: config/app.env, hosts, 포트 리스닝 상태
+[障害チケット INC-2026-0612-DB]
+症状: app → db.internal:5432 接続拒否 (Connection refused)
+確認: config/app.env, hosts, ポートリッスン状態
 EOF
 
-echo "==> 초기화 완료. ./check.sh 로 상태 확인"
+echo "==> 初期化完了。./check.sh で状態を確認"

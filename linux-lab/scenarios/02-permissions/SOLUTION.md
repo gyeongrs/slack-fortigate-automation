@@ -1,4 +1,4 @@
-# 시나리오 02 — 해설
+# シナリオ 02 — 解説
 
 ```bash
 cd /workspace/linux-lab/scenarios/02-permissions
@@ -10,15 +10,15 @@ chmod 750 app/data
 ./app/bin/deploy.sh
 ```
 
-## 권한 표
+## 権限表
 
-| 파일 | Before | After | 이유 |
-|------|--------|-------|------|
-| deploy.sh | 644 | 755 (+x) | 실행 필요 |
-| db.env | 644 | 600 | 비밀번호 보호 |
-| data/ | 777 | 750 | others 쓰기 차단 |
+| ファイル | Before | After | 理由 |
+|---------|--------|-------|------|
+| deploy.sh | 644 | 755 (+x) | 実行が必要 |
+| db.env | 644 | 600 | パスワード保護 |
+| data/ | 777 | 750 | others 書き込み拒否 |
 
-## 확인
+## 確認
 
 ```bash
 ls -la app/bin/ app/config/ app/data/

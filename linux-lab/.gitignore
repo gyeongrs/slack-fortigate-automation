@@ -1,4 +1,4 @@
-# setup.sh 가 생성하는 런타임 상태
+# setup.sh が生成するランタイム状態
 scenarios/*/data/
 scenarios/*/logs/
 scenarios/*/backup/

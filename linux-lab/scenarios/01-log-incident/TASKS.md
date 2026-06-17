@@ -1,73 +1,73 @@
-# 시나리오 01: 로그 분석 장애 (INC-2026-0612)
+# シナリオ 01: ログ分析障害 (INC-2026-0612)
 
-## 실무 배경
+## 実務背景
 
-09:00경 모니터링 알람: **API 500 에러 급증**.  
-온콜 엔지니어로서 로그를 분석하고 incident 보고서 초안을 작성합니다.
+09:00頃 モニタリングアラーム: **API 500 エラー急増**。
+オンコールエンジニアとしてログを分析し、インシデント報告書の下書きを作成します。
 
-## 증상
+## 症状
 
-- `/api/users`, `/api/orders` 응답 지연
-- 일부 사용자 500 에러
-- `data/incident.txt` 티켓 참고
+- `/api/users`, `/api/orders` の応答遅延
+- 一部ユーザーで 500 エラー
+- `data/incident.txt` チケット参照
 
-## 실습 파일
-
-```
-data/access.log   ← 웹 접근 로그
-data/app.log      ← 애플리케이션 로그
-data/incident.txt ← 장애 티켓
-```
-
-## 미션
-
-### Level 1 (기본)
-
-1. `access.log`에서 **500 에러 건수**를 센다
-2. 500을 발생시킨 **IP 주소**를 찾는다
-3. 해당 IP의 **요청 경로 Top 3**를 구한다
-
-### Level 2 (심화)
-
-4. `app.log`에서 **ERROR** 줄만 추출한다
-5. access.log 500 시간대와 app.log ERROR 시간대가 **일치하는지** 확인한다
-6. `answer.txt`에 아래 형식으로 작성한다:
+## 演習ファイル
 
 ```
-500_count: <숫자>
+data/access.log   ← Web アクセスログ
+data/app.log      ← アプリケーションログ
+data/incident.txt ← 障害チケット
+```
+
+## ミッション
+
+### Level 1（基本）
+
+1. `access.log` で **500 エラー件数** を数える
+2. 500 を発生させた **IP アドレス** を特定する
+3. その IP の **リクエストパス Top 3** を求める
+
+### Level 2（応用）
+
+4. `app.log` から **ERROR** 行のみ抽出する
+5. access.log の 500 発生時刻と app.log の ERROR 時刻が **一致するか** 確認する
+6. `answer.txt` に以下の形式で記載する:
+
+```
+500_count: <数字>
 attacker_ip: <IP>
-top_endpoint: <경로>
-root_cause_hint: <app.log 기반 추정 원인>
+top_endpoint: <パス>
+root_cause_hint: <app.log に基づく推定原因>
 ```
 
-## 힌트
+## ヒント
 
 ```bash
 cd /workspace/linux-lab/scenarios/01-log-incident
 
-# 500만 필터
+# 500 のみフィルタ
 grep ' 500 ' data/access.log
 
-# IP별 집계 (형식: TIMESTAMP IP METHOD PATH STATUS LATENCY)
+# IP 別集計（形式: TIMESTAMP IP METHOD PATH STATUS LATENCY）
 awk '$5 == 500 {print $2}' data/access.log | sort | uniq -c | sort -rn
 
-# 경로별 집계
+# パス別集計
 awk '$5 == 500 {print $4}' data/access.log | sort | uniq -c | sort -rn
 ```
 
-## 완료 확인
+## 完了確認
 
 ```bash
 cd /workspace/linux-lab
 ./check.sh 01
 ```
 
-## 실무 연결
+## 実務との関連
 
-- WAF/방화벽: 공격 IP `10.0.0.99` 차단 정책 검토
-- SIEM: 동일 패턴 알람 룰 작성
-- Runbook: "500 급증 → access.log IP 집계 → app.log 상관 분석"
+- WAF/ファイアウォール: 攻撃 IP `10.0.0.99` のブロックポリシー検討
+- SIEM: 同一パターンのアラームルール作成
+- Runbook: 「500 急増 → access.log IP 集計 → app.log 相関分析」
 
-## 정답
+## 解答
 
-막히면 [SOLUTION.md](SOLUTION.md) 참고
+詰まったら [SOLUTION.md](SOLUTION.md) を参照

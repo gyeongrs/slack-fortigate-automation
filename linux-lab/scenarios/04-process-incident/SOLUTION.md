@@ -1,4 +1,4 @@
-# 시나리오 04 — 해설
+# シナリオ 04 — 解説
 
 ```bash
 cd /workspace/linux-lab/scenarios/04-process-incident
@@ -8,18 +8,18 @@ pgrep -af runaway
 
 kill $(cat runaway.pid)
 sleep 1
-pgrep -af runaway || echo "종료됨"
+pgrep -af runaway || echo "終了済み"
 ```
 
-## kill 단계 (실무)
+## kill の手順（実務）
 
 ```bash
 kill -15 <PID>      # graceful
 sleep 5
-kill -9 <PID>       # 강제 (최후)
+kill -9 <PID>       # 強制（最終手段）
 ```
 
-## 재발 방지
+## 再発防止
 
 - systemd `TimeoutStopSec`
-- cron/monitoring으로 zombie 프로세스 알람
+- cron/監視でゾンビプロセスのアラーム
