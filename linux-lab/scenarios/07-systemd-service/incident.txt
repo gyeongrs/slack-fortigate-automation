@@ -1,0 +1,4 @@
+[障害チケット INC-2026-0612-SVC]
+症状: lab-web.service が failed（WSL で ./install-wsl-service.sh 実行後に対応）
+確認: systemctl --user status lab-web
+ヒント: WSL-SETUP.md 参照

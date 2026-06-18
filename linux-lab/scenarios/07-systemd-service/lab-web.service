@@ -1,0 +1,11 @@
+[Unit]
+Description=Lab Web Service for training
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/wrong/path/web.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

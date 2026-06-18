@@ -110,6 +110,28 @@ check_05() {
   fi
 }
 
+check_07() {
+  echo "==> 07-systemd-service"
+  if ! command -v systemctl >/dev/null 2>&1; then
+    info "systemctl なし — 07番は WSL-SETUP.md 参照（スキップ）"
+    return
+  fi
+  if ! systemctl --user status >/dev/null 2>&1; then
+    info "systemd 未起動 — WSL で wsl.conf [boot] systemd=true を設定"
+    return
+  fi
+  if systemctl --user is-active lab-web >/dev/null 2>&1; then
+    ok "lab-web.service が active (running)"
+  else
+    ng "lab-web が未起動 — install-wsl-service.sh 後、TASKS.md で修正して start"
+  fi
+  if grep -q '/wrong/path/web.sh' "$LAB_ROOT/scenarios/07-systemd-service/lab-web.service" 2>/dev/null; then
+    info "lab-web.service の ExecStart がまだ誤パス（シナリオ内ファイル）"
+  else
+    ok "lab-web.service の ExecStart 修正済み（シナリオ内）"
+  fi
+}
+
 check_06() {
   echo "==> 06-service-down"
   local listening=0
@@ -139,6 +161,7 @@ run_one() {
     04|4) check_04 ;;
     05|5) check_05 ;;
     06|6) check_06 ;;
+    07|7) check_07 ;;
     *) echo "不明なシナリオ: $1"; exit 1 ;;
   esac
 }
@@ -153,6 +176,7 @@ if [[ $# -eq 0 ]]; then
   check_04; echo
   check_05; echo
   check_06; echo
+  check_07; echo
 else
   run_one "$1"
 fi

@@ -167,4 +167,29 @@ cat > "$S06/incident.txt" << 'EOF'
 確認: config/app.env, hosts, ポートリッスン状態
 EOF
 
+# ── 07 systemctl（WSL / 実 Linux）────────────────────────────
+S07="$LAB_ROOT/scenarios/07-systemd-service"
+mkdir -p "$S07/bin"
+chmod +x "$S07/bin/web.sh" 2>/dev/null || true
+cat > "$S07/lab-web.service" << EOF
+[Unit]
+Description=Lab Web Service for training
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/wrong/path/web.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+cat > "$S07/incident.txt" << EOF
+[障害チケット INC-2026-0612-SVC]
+症状: lab-web.service が failed（WSL で ./install-wsl-service.sh 実行後に対応）
+確認: systemctl --user status lab-web
+ヒント: WSL-SETUP.md 参照
+EOF
+
 echo "==> 初期化完了。./check.sh で状態を確認"
+echo "    systemctl 演習: WSL-SETUP.md → ./install-wsl-service.sh → ./check.sh 07"

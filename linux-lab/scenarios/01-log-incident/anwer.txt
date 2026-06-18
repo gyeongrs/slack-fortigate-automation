@@ -1,0 +1,5 @@
+500_count: <数字>
+attacker_ip: <IP>
+top_endpoint: <パス>
+root_cause_hint: <app.log に基づく推定原因>
+EOF

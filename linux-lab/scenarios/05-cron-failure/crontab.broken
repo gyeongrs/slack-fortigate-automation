@@ -1,2 +1,2 @@
-# 매일 02:00 백업 — 경로 오타로 실패 중
+# 毎日 02:00 バックアップ — パス typo で失敗中
 0 2 * * * /workspace/linux-lab/scenarios/05-cron-failure/scripts/backp.sh
