@@ -1,0 +1,6 @@
+# WSL で systemctl を使うための設定例
+# コピー: sudo cp wsl.conf.example /etc/wsl.conf
+# その後 PowerShell で: wsl --shutdown && wsl
+
+[boot]
+systemd=true

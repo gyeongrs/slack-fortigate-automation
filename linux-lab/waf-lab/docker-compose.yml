@@ -1,0 +1,23 @@
+# WAF 演習ラボ — ModSecurity CRS + OWASP Juice Shop
+# Cloud VM 向け: network_mode=host（コンテナ間 bridge が不安定な環境用）
+
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: waf-lab-juice
+    network_mode: host
+    restart: unless-stopped
+
+  waf:
+    image: owasp/modsecurity-crs:nginx-alpine
+    container_name: waf-lab-modsec
+    network_mode: host
+    environment:
+      BACKEND: http://127.0.0.1:3000
+      PARANOIA: "1"
+      ANOMALY_INBOUND: "5"
+      ANOMALY_OUTBOUND: "4"
+      MODSEC_RULE_ENGINE: "On"
+    depends_on:
+      - juice-shop
+    restart: unless-stopped

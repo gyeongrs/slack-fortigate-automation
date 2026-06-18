@@ -1,0 +1,5 @@
+id,name,team,status
+1,alice,engineering,active
+2,bob,sales,active
+3,charlie,engineering,inactive
+4,diana,hr,active

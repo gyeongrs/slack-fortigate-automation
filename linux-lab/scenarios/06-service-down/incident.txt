@@ -1,0 +1,3 @@
+[障害チケット INC-2026-0612-DB]
+症状: app → db.internal:5432 接続拒否 (Connection refused)
+確認: config/app.env, hosts, ポートリッスン状態

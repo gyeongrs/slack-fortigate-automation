@@ -1,0 +1,13 @@
+# setup.sh が生成するランタイム状態
+scenarios/*/data/
+scenarios/*/logs/
+scenarios/*/backup/
+scenarios/*/run/
+scenarios/04-process-incident/incident.txt
+scenarios/06-service-down/incident.txt
+scenarios/07-service-recovery/incident.txt
+scenarios/07-service-recovery/service.conf
+scenarios/*/runaway.pid
+scenarios/03-disk-full/var/log/
+scenarios/04-process-incident/bin/runaway.sh
+shared/logs/
