@@ -29,7 +29,7 @@ cat scenarios/01-log-incident/TASKS.md
 | 06 | [DB 接続](scenarios/06-service-down/TASKS.md) | Connection refused | `ss`, `curl` |
 | 07 | [サービス復旧](scenarios/07-service-recovery/TASKS.md) | Web 起動失敗 | `svc-manage.sh`, `ss` |
 
-07番は **systemctl の代わり** に `svc-manage.sh` を使います（Cloud で動作）。
+**WAF 演習（Docker）:** [waf-lab/README.md](waf-lab/README.md) — ModSecurity + Juice Shop
 
 ---
 
