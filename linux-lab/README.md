@@ -1,68 +1,62 @@
 # Linux 実践トレーニング Lab
 
-運用（Ops）現場でよく遭遇する問題を **シナリオベース** で練習する環境です。
+運用（Ops）現場の問題を **シナリオベース** で練習します。  
+**全 7 シナリオは Cursor Cloud の Terminal タブだけで完結** します（WSL・管理者権限不要）。
 
-## どの環境で使う？
-
-| 環境 | 01〜06 | 07 systemctl |
-|------|--------|--------------|
-| **Cursor Cloud** | ✅ | ❌ |
-| **WSL2 (Windows)** | ✅ | ✅ [WSL-SETUP.md](WSL-SETUP.md) |
-| **Mac / Linux** | ✅ | ✅ |
-
-**無料で全部やる:** Windows + WSL2 + ZIP（Cursor 有料不要）
-
----
-
-## クイックスタート
+## クイックスタート（Cloud）
 
 ```bash
+cd /workspace/linux-lab
 chmod +x setup.sh check.sh
 ./setup.sh
 ./check.sh
+cat scenarios/01-log-incident/TASKS.md
 ```
 
-**WSL + systemctl:** [WSL-SETUP.md](WSL-SETUP.md) を読んでから `./install-wsl-service.sh`
+> エージェント入力欄で **Cloud** を選択 → 右パネル **Terminal** タブ
 
 ---
 
-## 学習ロードマップ
+## 学習ロードマップ（すべて Cloud ✅）
 
 | # | シナリオ | 実務イシュー | 主要コマンド |
 |---|---------|-------------|-------------|
-| 01 | [ログ分析障害](scenarios/01-log-incident/TASKS.md) | 500 エラー急増 | `grep`, `awk` |
-| 02 | [権限問題](scenarios/02-permissions/TASKS.md) | 実行不可・漏洩 | `chmod` |
-| 03 | [ディスク不足](scenarios/03-disk-full/TASKS.md) | ログで Full | `du`, `find` |
-| 04 | [プロセス障害](scenarios/04-process-incident/TASKS.md) | CPU 100% | `ps`, `kill` |
-| 05 | [cron 失敗](scenarios/05-cron-failure/TASKS.md) | バックアップ未実行 | `crontab` |
-| 06 | [接続失敗](scenarios/06-service-down/TASKS.md) | DB 接続不可 | `ss` |
-| 07 | [systemctl](scenarios/07-systemd-service/TASKS.md) | サービス failed | `systemctl`, `journalctl` |
+| 01 | [ログ分析](scenarios/01-log-incident/TASKS.md) | 500 エラー急増 | `grep`, `awk` |
+| 02 | [権限](scenarios/02-permissions/TASKS.md) | 実行不可・漏洩 | `chmod` |
+| 03 | [ディスク](scenarios/03-disk-full/TASKS.md) | ログで Full | `du`, `find` |
+| 04 | [プロセス](scenarios/04-process-incident/TASKS.md) | CPU 100% | `ps`, `kill` |
+| 05 | [cron](scenarios/05-cron-failure/TASKS.md) | バックアップ失敗 | `crontab`, ログ |
+| 06 | [DB 接続](scenarios/06-service-down/TASKS.md) | Connection refused | `ss`, `curl` |
+| 07 | [サービス復旧](scenarios/07-service-recovery/TASKS.md) | Web 起動失敗 | `svc-manage.sh`, `ss` |
+
+07番は **systemctl の代わり** に `svc-manage.sh` を使います（Cloud で動作）。
 
 ---
 
-## 推奨学習順序
+## 推奨順序
 
 ```
-1〜6日目: 01〜06（Cloud / WSL どちらでも）
-7日目:   07 systemctl（WSL 推奨）
+1日目: 01  2日目: 02  3日目: 03  4日目: 04
+5日目: 05  6日目: 06  7日目: 07
 ```
 
 ---
 
-## 他の人に渡す（無料）
+## 他の人に渡す（Cloud 前提）
 
-1. `Linux-upload.zip` を Google Drive 等で共有
-2. **WSL-SETUP.md** を一緒に送る
-3. 相手: `wsl --install` → ZIP 解凍 → `./setup.sh`
+1. GitHub / ZIP で `linux-lab` を共有
+2. **Cursor 個人アカウント** + **Cloud** で開く
+3. `./setup.sh` から開始
+
+管理者権限・WSL・有料以外の方法 → [SHARE.md](SHARE.md)
 
 ---
 
-## ディレクトリ構成
+## ディレクトリ
 
 ```
 linux-lab/
-├── WSL-SETUP.md          # WSL セットアップ（重要）
-├── install-wsl-service.sh # 07番用
 ├── setup.sh / check.sh
+├── SHARE.md              # 共有・無料プラン向け
 └── scenarios/01〜07/
 ```

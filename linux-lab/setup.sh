@@ -167,29 +167,31 @@ cat > "$S06/incident.txt" << 'EOF'
 確認: config/app.env, hosts, ポートリッスン状態
 EOF
 
-# ── 07 systemctl（WSL / 実 Linux）────────────────────────────
-S07="$LAB_ROOT/scenarios/07-systemd-service"
-mkdir -p "$S07/bin"
-chmod +x "$S07/bin/web.sh" 2>/dev/null || true
-cat > "$S07/lab-web.service" << EOF
-[Unit]
-Description=Lab Web Service for training
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/wrong/path/web.sh
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
+# ── 07 サービス復旧（Cloud 対応 — systemctl 不要）────────────
+S07="$LAB_ROOT/scenarios/07-service-recovery"
+mkdir -p "$S07"/{bin,run,logs}
+chmod +x "$S07/bin/web.sh" "$S07/svc-manage.sh" 2>/dev/null || true
+WEB_SCRIPT="$S07/bin/web.sh"
+cat > "$S07/service.conf" << EOF
+# lab-web サービス設定（Cloud 演習用）
+SERVICE_NAME=lab-web
+SCRIPT_PATH=/wrong/path/web.sh
+PORT=8088
+PID_FILE=run/lab-web.pid
+LOG_FILE=logs/web.log
 EOF
+pkill -f "07-service-recovery/bin/web.sh" 2>/dev/null || true
+pkill -f "HTTPServer.*8088" 2>/dev/null || true
+if command -v lsof >/dev/null 2>&1; then
+  lsof -t -i:8088 2>/dev/null | xargs -r kill 2>/dev/null || true
+fi
+rm -f "$S07/run/lab-web.pid" "$S07/logs/web.log"
 cat > "$S07/incident.txt" << EOF
-[障害チケット INC-2026-0612-SVC]
-症状: lab-web.service が failed（WSL で ./install-wsl-service.sh 実行後に対応）
-確認: systemctl --user status lab-web
-ヒント: WSL-SETUP.md 参照
+[障害チケット INC-2026-0612-WEB]
+症状: lab-web がポート 8088 で応答しない
+確認: ./svc-manage.sh status / service.conf の SCRIPT_PATH
+正しいパス: $WEB_SCRIPT
 EOF
 
 echo "==> 初期化完了。./check.sh で状態を確認"
-echo "    systemctl 演習: WSL-SETUP.md → ./install-wsl-service.sh → ./check.sh 07"
+echo "    全シナリオ Cloud Terminal で実施可能（01〜07）"

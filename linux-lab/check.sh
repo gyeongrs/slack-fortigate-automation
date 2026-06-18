@@ -111,24 +111,39 @@ check_05() {
 }
 
 check_07() {
-  echo "==> 07-systemd-service"
-  if ! command -v systemctl >/dev/null 2>&1; then
-    info "systemctl なし — 07番は WSL-SETUP.md 参照（スキップ）"
-    return
-  fi
-  if ! systemctl --user status >/dev/null 2>&1; then
-    info "systemd 未起動 — WSL で wsl.conf [boot] systemd=true を設定"
-    return
-  fi
-  if systemctl --user is-active lab-web >/dev/null 2>&1; then
-    ok "lab-web.service が active (running)"
+  echo "==> 07-service-recovery"
+  local s07="$LAB_ROOT/scenarios/07-service-recovery"
+  local conf="$s07/service.conf"
+  local port=8088
+  local listening=0
+
+  if grep -q '^SCRIPT_PATH=/wrong/path/web.sh' "$conf" 2>/dev/null; then
+    ng "service.conf の SCRIPT_PATH が未修正"
   else
-    ng "lab-web が未起動 — install-wsl-service.sh 後、TASKS.md で修正して start"
+    ok "service.conf の SCRIPT_PATH 修正済み"
   fi
-  if grep -q '/wrong/path/web.sh' "$LAB_ROOT/scenarios/07-systemd-service/lab-web.service" 2>/dev/null; then
-    info "lab-web.service の ExecStart がまだ誤パス（シナリオ内ファイル）"
+
+  if ss -tln 2>/dev/null | grep -q ":$port "; then
+    listening=1
+  elif netstat -tln 2>/dev/null | grep -q ":$port "; then
+    listening=1
+  fi
+  if [[ "$listening" -gt 0 ]]; then
+    ok "ポート $port でリッスン中"
   else
-    ok "lab-web.service の ExecStart 修正済み（シナリオ内）"
+    ng "ポート $port 未リッスン — svc-manage.sh start を実行"
+  fi
+
+  if [[ -f "$s07/run/lab-web.pid" ]] && kill -0 "$(cat "$s07/run/lab-web.pid")" 2>/dev/null; then
+    ok "lab-web プロセス実行中"
+  else
+    ng "lab-web プロセス未実行"
+  fi
+
+  if curl -sf "http://127.0.0.1:$port/" 2>/dev/null | grep -q 'lab-web OK'; then
+    ok "HTTP 応答 lab-web OK"
+  else
+    ng "curl http://127.0.0.1:$port/ が失敗"
   fi
 }
 
