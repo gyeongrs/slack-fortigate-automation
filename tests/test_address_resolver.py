@@ -2,10 +2,12 @@ from datetime import date
 
 from fwgitops.address_resolver import (
     build_address_object,
+    classify_address_tokens,
     match_exact,
     parse_address_spec,
     propose_object,
     resolve_addresses,
+    suggest_address_defaults,
 )
 
 _ADDR_OBJS = [
@@ -146,3 +148,30 @@ def test_named_address_requires_zone():
     assert new == []
     assert len(bad) == 1
     assert "zone=" in bad[0]
+
+
+def test_classify_existing_and_bare_ip():
+    names, new, need = classify_address_tokens(
+        ["corp-clients", "10.30.1.2"], _ADDR_OBJS, rules=_RULES
+    )
+    assert names == ["corp-clients"]
+    assert new == []
+    assert need == ["10.30.1.2"]
+
+
+def test_classify_inline_spec():
+    names, new, need = classify_address_tokens(
+        ["ch-host=10.77.0.5 prefix=32 zone=ch expire=90"],
+        _ADDR_OBJS,
+        rules=_RULES,
+    )
+    assert names == ["ch-host"]
+    assert len(new) == 1
+    assert need == []
+
+
+def test_suggest_address_defaults_for_cidr():
+    defaults = suggest_address_defaults("10.51.10.15/32")
+    assert defaults["address"] == "10.51.10.15"
+    assert defaults["prefix"] == "32"
+    assert defaults["name"].startswith("auto-")

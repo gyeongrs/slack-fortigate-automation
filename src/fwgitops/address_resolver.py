@@ -378,3 +378,77 @@ def resolve_addresses(
         unresolved.append(t)
 
     return names, new_objects, unresolved
+
+
+def classify_address_tokens(
+    tokens: list[str],
+    addr_objs: list[dict],
+    comment: str = "",
+    *,
+    rules: dict | None = None,
+    default_center: str = _DEFAULT_CENTER,
+) -> tuple[list[str], list[dict], list[str]]:
+    """Split policy address tokens for the Slack wizard flow.
+
+    Returns ``(resolved_names, inline_new_objects, wizard_tokens)``.
+    Existing names and full ``name=IP zone=...`` specs resolve inline; bare
+    IP/CIDR/FQDN or unknown names are queued for the address modal.
+    """
+    names: list[str] = []
+    new_objects: list[dict] = []
+    need: list[str] = []
+
+    pool = list(addr_objs)
+    taken = {a.get("name") for a in addr_objs if a.get("name")}
+
+    for t in tokens:
+        name = match_exact(t, pool)
+        if name is not None:
+            if name not in names:
+                names.append(name)
+            continue
+
+        obj, spec_errors = parse_address_spec(
+            t,
+            taken,
+            comment,
+            rules=rules,
+            default_center=default_center,
+        )
+        if obj is not None:
+            pool.append(obj)
+            taken.add(obj["name"])
+            new_objects.append(obj)
+            names.append(obj["name"])
+            continue
+
+        if spec_errors or as_network(t) is not None or _looks_like_fqdn(t):
+            need.append(t)
+            continue
+
+        need.append(t)
+
+    return names, new_objects, need
+
+
+def suggest_address_defaults(token: str) -> dict[str, str]:
+    """Suggest modal field defaults for a token that needs a new address."""
+    token = token.strip()
+    net = as_network(token)
+    if net is not None:
+        return {
+            "name": _auto_name(net, set()),
+            "address": str(net.network_address),
+            "prefix": str(net.prefixlen),
+        }
+    if _looks_like_fqdn(token):
+        return {
+            "name": _auto_fqdn_name(token, set()),
+            "address": token,
+            "prefix": "32",
+        }
+    return {
+        "name": token[:50],
+        "address": token,
+        "prefix": "32",
+    }

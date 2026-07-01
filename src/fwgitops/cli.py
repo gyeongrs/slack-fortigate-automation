@@ -13,7 +13,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .address_resolver import resolve_one
+from .address_resolver import match_exact as resolve_one
 from .expiry import load_expiry_config, policies_due_for_alert
 from .loader import load_desired_state, load_rules, load_shared_services
 from .models import Address, Policy
